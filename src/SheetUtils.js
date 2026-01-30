@@ -186,24 +186,42 @@ var SheetUtils = (function () {
 
         addSlots: function (slots) {
             var sheet = getSheet(SHEET_NAME_SLOTS);
-            var lastRow = sheet.getLastRow();
-            var timeZone = Session.getScriptTimeZone();
 
-            var rowsToAdd = slots.map(function (slot) {
-                var date = new Date(slot);
-                if (isNaN(date.getTime())) {
-                    // Check if valid date
-                    return [slot, '空き'];
+            // 1. Get existing dates to prevent duplicates
+            var existingData = sheet.getDataRange().getValues();
+            var existingTimes = {}; // Use object for O(1) lookup
+            for (var i = 1; i < existingData.length; i++) { // Skip header
+                var d = new Date(existingData[i][0]);
+                if (!isNaN(d.getTime())) {
+                    existingTimes[d.getTime()] = true;
                 }
-                // Save as Date object for better data handling
-                return [date, '空き'];
+            }
+
+            var rowsToAdd = [];
+            slots.forEach(function (slot) {
+                var date = new Date(slot);
+                // Check validity and duplication
+                if (!isNaN(date.getTime()) && !existingTimes[date.getTime()]) {
+                    rowsToAdd.push([date, '空き']);
+                }
             });
 
             if (rowsToAdd.length > 0) {
+                var lastRow = sheet.getLastRow();
                 var range = sheet.getRange(lastRow + 1, 1, rowsToAdd.length, 2);
-                // Set format to "yyyy年M月d日(ddd) HH:mm" for display
                 range.setNumberFormat('yyyy"年"M"月"d"日"(ddd) HH:mm');
                 range.setValues(rowsToAdd);
+            }
+
+            // 2. Auto-sort: Status (Desc) -> Date (Asc)
+            // '空き' (Open) > '予約済' (Reserved) because '空' (U+7A7A) > '予' (U+4E88)
+            var totalRows = sheet.getLastRow();
+            if (totalRows > 1) {
+                // Sort range excluding header (row 1)
+                sheet.getRange(2, 1, totalRows - 1, 2).sort([
+                    { column: 2, ascending: false }, // Status: Open first
+                    { column: 1, ascending: true }   // Date: Chronological
+                ]);
             }
 
             return this.updateSlotsCache();
