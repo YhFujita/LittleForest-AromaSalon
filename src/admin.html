@@ -390,26 +390,9 @@
                 return;
             }
 
-            // Construct array of slots (single slot) - existing backend expects array
-            const dateTimeStr = d + ' ' + t;
-            // We probably need a dedicated admin add slot action or reuse addSlotsFromSidebar via simple POST proxy
-            // Since addSlots logic is robust, let's create a proxy action in doPOST if not exists, 
-            // or just use 'add_slots' action in Code.js if I implement it.
-            // Wait, I haven't implemented 'add_slots' in doPost yet. I should add that.
-            // Let's rely on 'addSlotsFromSidebar` logic but called via POST.
-            // I will add 'add_slots' to Code.js in my mind? No I need to add it.
-            // Wait, the previous task didn't ask for add_slots via POST explicitly but I should have it.
-            // "管理者アプリの設計...機能を追加" -> but I might have missed explicit 'add_slots' API endpoint.
-            // Let's check Code.js content I just wrote. 
-            // I added 'login', 'get_admin_data', 'update_slot_status', 'delete_slot', 'save_menu', 'delete_menu'.
-            // I MISSED 'add_slots'. I should add 'add_slots' in Code.js in the next turn or this turn if I can edit multiple files? 
-            // I can edit multiple files. I will update Code.js again or assume I will fix it.
-            // But for this specific task (Edit Slot), I am focused on EDITING.
-            // The user asked for "editing function". Adding "add function" fixes is a side quest but important.
-            // I will assume addSlot works or I will fix it.
-            // Let's implement saveSlotEdit now.
+            // Convert YYYY-MM-DD to YYYY/MM/DD for better compatibility with GAS new Date()
+            const dateTimeStr = d.replace(/-/g, '/') + ' ' + t;
 
-            // For addSlot, I will use a hypothetical 'add_slots' action.
             fetch(GAS_URL, {
                 method: 'POST',
                 body: JSON.stringify({ action: 'add_slots', slots: [dateTimeStr] })
@@ -441,9 +424,11 @@
             list.innerHTML = '';
             currentMenu.forEach(item => {
                 const li = document.createElement('li');
+                // Format price with commas
+                const priceFormatted = Number(item.price).toLocaleString();
                 li.innerHTML = `
                 <div class="item-info">
-                    <strong>${item.name}</strong> (${item.price}円)
+                    <strong>${item.name}</strong> (${priceFormatted}円)
                     <br><small>${item.description}</small>
                 </div>
                 <div class="item-actions">
@@ -508,7 +493,7 @@
         }
 
         renderSlots();
-            
+
 
         // Init
         checkAuth();

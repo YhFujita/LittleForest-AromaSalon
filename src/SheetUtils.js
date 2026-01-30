@@ -317,7 +317,8 @@ var SheetUtils = (function () {
                 for (var i = 1; i < data.length; i++) {
                     if (data[i][0] == item.id) {
                         // Update row
-                        sheet.getRange(i + 1, 1, 1, 6).setValues([[
+                        var range = sheet.getRange(i + 1, 1, 1, 6);
+                        range.setValues([[
                             item.id,
                             item.name,
                             item.price,
@@ -325,6 +326,9 @@ var SheetUtils = (function () {
                             item.description,
                             item.order
                         ]]);
+                        // Format Price (Column 3 is relative index 2? No, getRange(row, 1, 1, 6) -> 3rd cell is col index 3 in sheet)
+                        // sheet.getRange(row, col) -> Price is 3rd column
+                        sheet.getRange(i + 1, 3).setNumberFormat('#,##0');
                         updated = true;
                         break;
                     }
@@ -342,6 +346,9 @@ var SheetUtils = (function () {
                     item.description,
                     item.order
                 ]);
+                // Format the newly added row's price column
+                var lastRow = sheet.getLastRow();
+                sheet.getRange(lastRow, 3).setNumberFormat('#,##0');
             }
 
             return this.updateMenuCache();
