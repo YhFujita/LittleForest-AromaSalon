@@ -89,6 +89,12 @@ function doPost(e) {
             return output;
         }
 
+        if (action === 'reorder_menu') {
+            SheetUtils.reorderMenuItems(data.ids);
+            output.setContent(JSON.stringify({ status: 'success' }));
+            return output;
+        }
+
 
         // If 'action' is specified, handle specific tasks (like refreshing cache)
         if (action === 'refresh_menu') {
