@@ -331,3 +331,64 @@ function authorize() {
     CalendarApp.getDefaultCalendar();
     console.log('Authorization successful');
 }
+
+/**
+ * Sends a push message to the specified LINE User ID.
+ */
+function sendLineNotification(userId, data) {
+    var props = PropertiesService.getScriptProperties();
+    var token = props.getProperty('LINE_CHANNEL_ACCESS_TOKEN');
+
+    if (!token) {
+        console.warn('LINE_CHANNEL_ACCESS_TOKEN not set. Skipping LINE notification.');
+        return;
+    }
+
+    var menuItems = SheetUtils.getMenuItems();
+    var selectedMenu = menuItems.find(function (item) { return item.id === data.menu; });
+    var menuName = selectedMenu ? selectedMenu.name : '不明なメニュー (ID: ' + data.menu + ')';
+
+    // Format Date
+    var d = new Date(data.datetime);
+    var dateStr = Utilities.formatDate(d, Session.getScriptTimeZone(), 'M月d日(E) HH:mm');
+    // Japanese day of week manual map if locale not reliable, but 'E' usually works
+    // Let's force Japanese day of week to be safe
+    var days = ['日', '月', '火', '水', '木', '金', '土'];
+    var dayName = days[d.getDay()];
+    var dateStrJP = Utilities.formatDate(d, Session.getScriptTimeZone(), 'M月d日') + '(' + dayName + ') ' + Utilities.formatDate(d, Session.getScriptTimeZone(), 'HH:mm');
+
+    var messageText =
+        data.name + '様、ご予約ありがとうございます。\n' +
+        '以下の内容で承りました。\n\n' +
+        '■日時: ' + dateStrJP + '\n' +
+        '■メニュー: ' + menuName + '\n' +
+        '■金額: ' + Number(selectedMenu ? selectedMenu.price : 0).toLocaleString() + '円\n\n' +
+        'ご来店をお待ちしております。';
+
+    var payload = {
+        to: userId,
+        messages: [{
+            type: 'text',
+            text: messageText
+        }]
+    };
+
+    var options = {
+        method: 'post',
+        contentType: 'application/json',
+        headers: {
+            'Authorization': 'Bearer ' + token
+        },
+        payload: JSON.stringify(payload),
+        muteHttpExceptions: true
+    };
+
+    try {
+        var response = UrlFetchApp.fetch('https://api.line.me/v2/bot/message/push', options);
+        var rCode = response.getResponseCode();
+        var rText = response.getContentText();
+        console.log('LINE API Response: ' + rCode + ' / ' + rText);
+    } catch (e) {
+        console.error('Failed to send LINE message: ' + e.toString());
+    }
+}
