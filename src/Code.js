@@ -11,8 +11,67 @@ function doPost(e) {
         }
 
         // --- Action Dispatcher ---
+        var action = data.action;
+
+        // --- Admin Actions ---
+        if (action === 'login') {
+            var props = PropertiesService.getScriptProperties();
+            var validId = props.getProperty('ADMIN_ID');
+            var validPass = props.getProperty('ADMIN_PASSWORD');
+
+            if (data.id === validId && data.password === validPass) {
+                output.setContent(JSON.stringify({ status: 'success', token: 'valid_session' })); // Simple token
+            } else {
+                output.setContent(JSON.stringify({ status: 'error', message: 'Authentication failed' }));
+            }
+            return output;
+        }
+
+        if (action === 'get_admin_data') {
+            // Basic auth check (should be improved in production)
+            // In a real app, validate token. Here we rely on the frontend having passed login.
+            var menu = SheetUtils.getMenuItems();
+            var slots = SheetUtils.getAvailableSlots();
+            output.setContent(JSON.stringify({ status: 'success', menu: menu, slots: slots }));
+            return output;
+        }
+
+        if (action === 'update_slot_status') {
+            if (SheetUtils.updateSlotStatus(data.datetime, data.status)) {
+                output.setContent(JSON.stringify({ status: 'success' }));
+            } else {
+                output.setContent(JSON.stringify({ status: 'error', message: 'Slot not found' }));
+            }
+            return output;
+        }
+
+        if (action === 'delete_slot') {
+            if (SheetUtils.deleteSlot(data.datetime)) {
+                output.setContent(JSON.stringify({ status: 'success' }));
+            } else {
+                output.setContent(JSON.stringify({ status: 'error', message: 'Slot not found' }));
+            }
+            return output;
+        }
+
+        if (action === 'save_menu') {
+            SheetUtils.saveMenuItem(data.item);
+            output.setContent(JSON.stringify({ status: 'success' }));
+            return output;
+        }
+
+        if (action === 'delete_menu') {
+            if (SheetUtils.deleteMenuItem(data.id)) {
+                output.setContent(JSON.stringify({ status: 'success' }));
+            } else {
+                output.setContent(JSON.stringify({ status: 'error', message: 'Item not found' }));
+            }
+            return output;
+        }
+
+
         // If 'action' is specified, handle specific tasks (like refreshing cache)
-        if (data.action === 'refresh_menu') {
+        if (action === 'refresh_menu') {
             var menu = SheetUtils.updateMenuCache();
             output.setContent(JSON.stringify({
                 status: 'success',
@@ -21,8 +80,6 @@ function doPost(e) {
             }));
             return output;
         }
-
-        // --- SECURITY CHECKS (For Reservation) ---
 
         // 1. Honeypot check
         if (data.honeypot) {

@@ -225,6 +225,99 @@ var SheetUtils = (function () {
             }
 
             return this.updateSlotsCache();
+        },
+
+        // --- Admin Functions ---
+
+        deleteSlot: function (targetDatetimeStr) {
+            var sheet = getSheet(SHEET_NAME_SLOTS);
+            var data = sheet.getDataRange().getValues();
+            var timeZone = Session.getScriptTimeZone();
+
+            for (var i = 1; i < data.length; i++) {
+                var cellDate = new Date(data[i][0]);
+                var cellDateStr = Utilities.formatDate(cellDate, timeZone, 'yyyy/MM/dd HH:mm');
+
+                // Compare with target datetime (assuming target passed as normalized string)
+                if (cellDateStr === targetDatetimeStr) {
+                    sheet.deleteRow(i + 1);
+                    this.updateSlotsCache();
+                    return true;
+                }
+            }
+            return false;
+        },
+
+        updateSlotStatus: function (targetDatetimeStr, newStatus) {
+            var sheet = getSheet(SHEET_NAME_SLOTS);
+            var data = sheet.getDataRange().getValues();
+            var timeZone = Session.getScriptTimeZone();
+
+            for (var i = 1; i < data.length; i++) {
+                var cellDate = new Date(data[i][0]);
+                var cellDateStr = Utilities.formatDate(cellDate, timeZone, 'yyyy/MM/dd HH:mm');
+
+                if (cellDateStr === targetDatetimeStr) {
+                    sheet.getRange(i + 1, 2).setValue(newStatus);
+                    this.updateSlotsCache();
+                    return true;
+                }
+            }
+            return false;
+        },
+
+        saveMenuItem: function (item) {
+            var sheet = getSheet(SHEET_NAME_MENU);
+            var data = sheet.getDataRange().getValues();
+            var updated = false;
+
+            // Try to update existing
+            if (item.id) {
+                for (var i = 1; i < data.length; i++) {
+                    if (data[i][0] == item.id) {
+                        // Update row
+                        sheet.getRange(i + 1, 1, 1, 6).setValues([[
+                            item.id,
+                            item.name,
+                            item.price,
+                            item.duration,
+                            item.description,
+                            item.order
+                        ]]);
+                        updated = true;
+                        break;
+                    }
+                }
+            }
+
+            // Insert new if not updated
+            if (!updated) {
+                item.id = item.id || Utilities.getUuid();
+                sheet.appendRow([
+                    item.id,
+                    item.name,
+                    item.price,
+                    item.duration,
+                    item.description,
+                    item.order
+                ]);
+            }
+
+            return this.updateMenuCache();
+        },
+
+        deleteMenuItem: function (id) {
+            var sheet = getSheet(SHEET_NAME_MENU);
+            var data = sheet.getDataRange().getValues();
+
+            for (var i = 1; i < data.length; i++) {
+                if (data[i][0] == id) {
+                    sheet.deleteRow(i + 1);
+                    this.updateMenuCache();
+                    return true;
+                }
+            }
+            return false;
         }
     };
 })();
