@@ -4,6 +4,7 @@ var SheetUtils = (function () {
     var SHEET_NAME_RESERVATIONS = '予約一覧';
     var SHEET_NAME_MENU = 'メニュー設定';
     var SHEET_NAME_SLOTS = '予約可能日時';
+    var SHEET_NAME_SETTINGS = '設定';
     var CACHE_KEY_MENU = 'MENU_CACHE';
     var CACHE_KEY_SLOTS = 'SLOTS_CACHE';
 
@@ -48,6 +49,16 @@ var SheetUtils = (function () {
                 sheet.appendRow(['premium', 'プレミアムコース', '9000', '90', '充実のコースです', '2']);
             } else if (name === SHEET_NAME_SLOTS) {
                 sheet.appendRow(['日時', 'ステータス']);
+            } else if (name === SHEET_NAME_SETTINGS) {
+                sheet.appendRow(['キー', '値']);
+                var defaultTemplate =
+                    '{{name}}様、ご予約ありがとうございます。\n' +
+                    '以下の内容で承りました。\n\n' +
+                    '■日時: {{date}}\n' +
+                    '■メニュー: {{menu}}\n' +
+                    '■金額: {{price}}円\n\n' +
+                    'ご来店をお待ちしております。';
+                sheet.appendRow(['LINE_MESSAGE_TEMPLATE', defaultTemplate]);
             }
         }
         return sheet;
