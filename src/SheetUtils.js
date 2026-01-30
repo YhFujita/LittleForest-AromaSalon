@@ -195,14 +195,14 @@ var SheetUtils = (function () {
                     // Check if valid date
                     return [slot, '空き'];
                 }
-                var formattedSlot = formatDateJP(date);
-                return [formattedSlot, '空き'];
+                // Save as Date object for better data handling
+                return [date, '空き'];
             });
 
             if (rowsToAdd.length > 0) {
-                // Text format to prevent auto-conversion
                 var range = sheet.getRange(lastRow + 1, 1, rowsToAdd.length, 2);
-                range.setNumberFormat('@');
+                // Set format to "yyyy年M月d日(ddd) HH:mm" for display
+                range.setNumberFormat('yyyy"年"M"月"d"日"(ddd) HH:mm');
                 range.setValues(rowsToAdd);
             }
 
