@@ -2,7 +2,7 @@ window.onload = function () {
     // Initialize LIFF logic
     // Replace "YOUR_LIFF_ID" with your actual LIFF ID from LINE Developers Console
     // or set it via a global config if preferred. Using a placeholder here for user update.
-    liff.init({ liffId: "YOUR_LIFF_ID" })
+    liff.init({ liffId: "2009015288-DWfo5Yqy" })
         .then(() => {
             console.log("LIFF Initialized");
             if (!liff.isLoggedIn()) {
