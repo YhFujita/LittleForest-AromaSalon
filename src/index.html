@@ -1,75 +1,77 @@
 <!DOCTYPE html>
 <html>
-  <head>
-    <base target="_top">
+
+<head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
     <title>予約フォーム</title>
-    <?!= include('src/css/style'); ?>
-  </head>
-  <body>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+
+<body>
     <div class="main-container">
-      <div class="glass-card">
-        <header>
-          <h1>Reservation</h1>
-          <p>ご予約はこちらから</p>
-        </header>
+        <div class="glass-card">
+            <header>
+                <h1>Reservation</h1>
+                <p>ご予約はこちらから</p>
+            </header>
 
-        <form id="reservationForm">
-          <div class="form-group">
-            <label for="menu">メニュー</label>
-            <div class="select-wrapper">
-              <select id="menu" name="menu" required>
-                <option value="" disabled selected>メニューを選択してください</option>
-                <option value="basic">ベーシックコース (60分) - ¥6,000</option>
-                <option value="premium">プレミアムコース (90分) - ¥9,000</option>
-                <option value="special">スペシャルケア (120分) - ¥12,000</option>
-              </select>
+            <form id="reservationForm">
+                <div class="form-group">
+                    <label for="menu">メニュー</label>
+                    <div class="select-wrapper">
+                        <select id="menu" name="menu" required>
+                            <option value="" disabled selected>メニューを選択してください</option>
+                            <option value="basic">ベーシックコース (60分) - ¥6,000</option>
+                            <option value="premium">プレミアムコース (90分) - ¥9,000</option>
+                            <option value="special">スペシャルケア (120分) - ¥12,000</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label for="datetime">ご希望日時</label>
+                    <input type="datetime-local" id="datetime" name="datetime" required>
+                </div>
+
+                <div class="form-group">
+                    <label for="name">お名前</label>
+                    <input type="text" id="name" name="name" placeholder="山田 花子" required>
+                </div>
+
+                <div class="form-group">
+                    <label for="phone">電話番号</label>
+                    <input type="tel" id="phone" name="phone" placeholder="090-1234-5678" required>
+                </div>
+
+                <div class="form-group">
+                    <label for="notes">備考</label>
+                    <textarea id="notes" name="notes" rows="3" placeholder="ご要望があればご記入ください"></textarea>
+                </div>
+
+                <button type="submit" id="submitBtn">
+                    <span>予約を確定する</span>
+                </button>
+            </form>
+
+            <div id="loading" class="hidden">
+                <div class="spinner"></div>
+                <p>送信中...</p>
             </div>
-          </div>
 
-          <div class="form-group">
-            <label for="datetime">ご希望日時</label>
-            <input type="datetime-local" id="datetime" name="datetime" required>
-          </div>
-
-          <div class="form-group">
-            <label for="name">お名前</label>
-            <input type="text" id="name" name="name" placeholder="山田 花子" required>
-          </div>
-
-          <div class="form-group">
-            <label for="phone">電話番号</label>
-            <input type="tel" id="phone" name="phone" placeholder="090-1234-5678" required>
-          </div>
-
-          <div class="form-group">
-            <label for="notes">備考</label>
-            <textarea id="notes" name="notes" rows="3" placeholder="ご要望があればご記入ください"></textarea>
-          </div>
-
-          <button type="submit" id="submitBtn">
-            <span>予約を確定する</span>
-          </button>
-        </form>
-        
-        <div id="loading" class="hidden">
-          <div class="spinner"></div>
-          <p>送信中...</p>
+            <div id="successMessage" class="hidden">
+                <svg viewBox="0 0 24 24" class="success-icon">
+                    <path fill="currentColor" d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z" />
+                </svg>
+                <h2>予約完了</h2>
+                <p>ご予約ありがとうございます。<br>確認のご連絡をお待ちください。</p>
+                <button id="closeBtn" onclick="liff.closeWindow()">閉じる</button>
+            </div>
         </div>
-
-        <div id="successMessage" class="hidden">
-          <svg viewBox="0 0 24 24" class="success-icon">
-            <path fill="currentColor" d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/>
-          </svg>
-          <h2>予約完了</h2>
-          <p>ご予約ありがとうございます。<br>確認のご連絡をお待ちください。</p>
-          <button id="closeBtn" onclick="liff.closeWindow()">閉じる</button>
-        </div>
-      </div>
     </div>
-    
+
     <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
-    <?!= include('src/js/script'); ?>
-  </body>
+    <script src="js/script.js"></script>
+</body>
+
 </html>
