@@ -3,11 +3,31 @@ window.onload = function () {
     // liff.init({ liffId: "YOUR_LIFF_ID" })...
 
     // ★ 重要: デプロイされたGASウェブアプリのURLをここに設定してください
-    const GAS_API_URL = 'YOUR_GAS_WEB_APP_URL';
+    const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbwZw61TyYkb8fboc8mWRZGZUpzqRWUluykk2cQ4hKXQV83RySPsprsKVL9R8Luy4AbZtw/exec';
 
     const form = document.getElementById('reservationForm');
     const loading = document.getElementById('loading');
     const success = document.getElementById('successMessage');
+    const menuSelect = document.getElementById('menu');
+
+    // Load Menu
+    fetch(GAS_API_URL + '?action=get_menu')
+        .then(response => response.json())
+        .then(data => {
+            if (data.status === 'success' && data.menu) {
+                menuSelect.innerHTML = '<option value="" disabled selected>メニューを選択してください</option>';
+                data.menu.forEach(item => {
+                    const option = document.createElement('option');
+                    option.value = item.id;
+                    option.textContent = `${item.name} (${item.duration}分) - ¥${Number(item.price).toLocaleString()}`;
+                    menuSelect.appendChild(option);
+                });
+            }
+        })
+        .catch(err => {
+            console.error('Failed to load menu', err);
+            menuSelect.innerHTML = '<option value="" disabled selected>メニューの読み込みに失敗しました</option>';
+        });
 
     form.addEventListener('submit', function (e) {
         e.preventDefault();

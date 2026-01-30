@@ -10,7 +10,19 @@ function doPost(e) {
             throw new Error('No data received');
         }
 
-        // --- SECURITY CHECKS ---
+        // --- Action Dispatcher ---
+        // If 'action' is specified, handle specific tasks (like refreshing cache)
+        if (data.action === 'refresh_menu') {
+            var menu = SheetUtils.updateMenuCache();
+            output.setContent(JSON.stringify({
+                status: 'success',
+                message: 'Menu cache updated',
+                menu: menu
+            }));
+            return output;
+        }
+
+        // --- SECURITY CHECKS (For Reservation) ---
 
         // 1. Honeypot check (Spam prevention)
         // If the hidden field 'honeypot' has a value, it's likely a bot.
@@ -54,7 +66,27 @@ function doPost(e) {
 }
 
 function doGet(e) {
-    var output = ContentService.createTextOutput(JSON.stringify({ status: 'running', message: 'GAS Backend is active' }));
+    var output = ContentService.createTextOutput();
     output.setMimeType(ContentService.MimeType.JSON);
+
+    // Check for 'action' parameter (e.g. ?action=get_menu)
+    if (e.parameter && e.parameter.action === 'get_menu') {
+        try {
+            var menuItems = SheetUtils.getMenuItems();
+            output.setContent(JSON.stringify({
+                status: 'success',
+                menu: menuItems
+            }));
+        } catch (err) {
+            output.setContent(JSON.stringify({
+                status: 'error',
+                message: err.toString()
+            }));
+        }
+        return output;
+    }
+
+    // Default response
+    output.setContent(JSON.stringify({ status: 'running', message: 'GAS Backend is active. Use ?action=get_menu to fetch menu.' }));
     return output;
 }
