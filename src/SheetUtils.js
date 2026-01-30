@@ -42,7 +42,7 @@ var SheetUtils = (function () {
                 // Modified header to include '金額', swapped Date columns
                 sheet.appendRow(['希望日時', '予約ID', '予約者名', 'メニュー', '金額', '送信日時', '電話番号', '備考', 'ステータス']);
             } else if (name === SHEET_NAME_MENU) {
-                sheet.appendRow(['ID', 'メニュー名', '価格', '所要時間(分)', '説明', '表示順']);
+                sheet.appendRow(['ID', 'メニュー名', '価格', '所要時間(分)', '説明', '表示順', 'カテゴリタイトル']);
                 // Add sample data
                 sheet.appendRow(['basic', 'ベーシックコース', '6000', '60', '基本のコースです', '1']);
                 sheet.appendRow(['premium', 'プレミアムコース', '9000', '90', '充実のコースです', '2']);
@@ -116,7 +116,10 @@ var SheetUtils = (function () {
                     price: row[2],
                     duration: row[3],
                     description: row[4],
-                    order: row[5]
+                    duration: row[3],
+                    description: row[4],
+                    order: row[5],
+                    section: row[6] || '' // Category/Section Title
                 };
             }).filter(function (item) { return item.id && item.name; })
                 .sort(function (a, b) {
@@ -320,15 +323,16 @@ var SheetUtils = (function () {
             if (item.id) {
                 for (var i = 1; i < data.length; i++) {
                     if (data[i][0] == item.id) {
-                        // Update row
-                        var range = sheet.getRange(i + 1, 1, 1, 6);
+                        // Update row (now 7 cols)
+                        var range = sheet.getRange(i + 1, 1, 1, 7);
                         range.setValues([[
                             item.id,
                             item.name,
                             item.price,
                             item.duration,
                             item.description,
-                            item.order
+                            item.order,
+                            item.section
                         ]]);
                         // Format Price (Column 3 is relative index 2? No, getRange(row, 1, 1, 6) -> 3rd cell is col index 3 in sheet)
                         // sheet.getRange(row, col) -> Price is 3rd column
@@ -348,12 +352,36 @@ var SheetUtils = (function () {
                     item.price,
                     item.duration,
                     item.description,
-                    item.order
+                    item.order,
+                    item.section
                 ]);
                 // Format the newly added row's price column
                 var lastRow = sheet.getLastRow();
                 sheet.getRange(lastRow, 3).setNumberFormat('#,##0');
             }
+
+            return this.updateMenuCache();
+        },
+
+        reorderMenuItems: function (ids) {
+            var sheet = getSheet(SHEET_NAME_MENU);
+            var data = sheet.getDataRange().getValues();
+            var idMap = {}; // Map ID to Row Index for O(1)
+
+            // Build map (skip header)
+            for (var i = 1; i < data.length; i++) {
+                idMap[String(data[i][0])] = i + 1; // 1-based index
+            }
+
+            // Update order for each ID in the new list
+            ids.forEach(function (id, index) {
+                var rowIndex = idMap[id];
+                if (rowIndex) {
+                    // Update 'order' column (Column 6) with new index (1-based or 0-based doesn't matter as long as it sorts)
+                    // We use (index + 1) * 10 to leave room if needed
+                    sheet.getRange(rowIndex, 6).setValue((index + 1) * 10);
+                }
+            });
 
             return this.updateMenuCache();
         },

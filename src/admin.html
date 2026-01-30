@@ -214,8 +214,10 @@
                 <input type="text" id="menuName" placeholder="メニュー名">
                 <input type="number" id="menuPrice" placeholder="価格（円）">
                 <input type="number" id="menuDuration" placeholder="所要時間（分）">
+                <input type="number" id="menuDuration" placeholder="所要時間（分）">
+                <input type="text" id="menuSection" placeholder="セクションタイトル（項目の上に表示：例「コース」）">
                 <textarea id="menuDesc" placeholder="説明" rows="2"></textarea>
-                <input type="number" id="menuOrder" placeholder="表示順 (数値)">
+                <input type="hidden" id="menuOrder"> <!-- Hidden, managed by list order -->
                 <button class="btn-primary" onclick="saveMenu()">保存</button>
                 <button class="btn-secondary hidden" id="cancelEditBtn" onclick="resetMenuForm()">キャンセル</button>
             </div>
@@ -426,14 +428,30 @@
                 const li = document.createElement('li');
                 // Format price with commas
                 const priceFormatted = Number(item.price).toLocaleString();
+
+                // Section Header if present
+                if (item.section) {
+                    const sectionHeader = document.createElement('div');
+                    sectionHeader.style.cssText = 'background:#eee; padding:5px 10px; font-weight:bold; margin-top:10px; border-radius:4px;';
+                    sectionHeader.textContent = item.section;
+                    list.appendChild(sectionHeader);
+                }
+
                 li.innerHTML = `
                 <div class="item-info">
                     <strong>${item.name}</strong> (${priceFormatted}円 / ${item.duration}分)
                     <br><small>${item.description}</small>
+                    ${item.section ? '<br><span style="font-size:0.8em; color:blue;">[セクション始点: ' + item.section + ']</span>' : ''}
                 </div>
-                <div class="item-actions">
-                    <button class="btn-sm btn-secondary" onclick='editMenu(${JSON.stringify(item)})'>編集</button>
-                    <button class="btn-sm btn-danger" onclick="deleteMenu('${item.id}')">削除</button>
+                <div class="item-actions" style="flex-direction: column; gap: 5px;">
+                    <div style="display:flex; gap:5px;">
+                         <button class="btn-sm btn-secondary" onclick="moveMenu(event, '${item.id}', -1)">↑</button>
+                         <button class="btn-sm btn-secondary" onclick="moveMenu(event, '${item.id}', 1)">↓</button>
+                    </div>
+                    <div style="display:flex; gap:5px;">
+                        <button class="btn-sm btn-secondary" onclick='editMenu(${JSON.stringify(item)})'>編集</button>
+                        <button class="btn-sm btn-danger" onclick="deleteMenu('${item.id}')">削除</button>
+                    </div>
                 </div>
             `;
                 list.appendChild(li);
@@ -445,8 +463,11 @@
             document.getElementById('menuName').value = item.name;
             document.getElementById('menuPrice').value = item.price;
             document.getElementById('menuDuration').value = item.duration;
+            document.getElementById('menuPrice').value = item.price;
+            document.getElementById('menuDuration').value = item.duration;
+            document.getElementById('menuSection').value = item.section || '';
             document.getElementById('menuDesc').value = item.menuDesc || item.description;
-            document.getElementById('menuOrder').value = item.order;
+            // Order is preserved but hidden
             document.getElementById('cancelEditBtn').classList.remove('hidden');
             window.scrollTo(0, 0);
         }
@@ -456,8 +477,10 @@
             document.getElementById('menuName').value = '';
             document.getElementById('menuPrice').value = '';
             document.getElementById('menuDuration').value = '';
+            document.getElementById('menuDuration').value = '';
+            document.getElementById('menuSection').value = '';
             document.getElementById('menuDesc').value = '';
-            document.getElementById('menuOrder').value = '';
+            // document.getElementById('menuOrder').value = '';
             document.getElementById('cancelEditBtn').classList.add('hidden');
         }
 
@@ -467,8 +490,12 @@
                 name: document.getElementById('menuName').value,
                 price: document.getElementById('menuPrice').value,
                 duration: document.getElementById('menuDuration').value,
+                name: document.getElementById('menuName').value,
+                price: document.getElementById('menuPrice').value,
+                duration: document.getElementById('menuDuration').value,
                 description: document.getElementById('menuDesc').value,
-                order: document.getElementById('menuOrder').value
+                section: document.getElementById('menuSection').value,
+                order: document.getElementById('menuOrder').value // Keep existing if editing, or will be appended
             };
 
             fetch(GAS_URL, {
@@ -490,6 +517,37 @@
                 showMessage('削除しました', true);
                 loadData();
             });
+        }
+
+        function moveMenu(e, id, direction) {
+            e.stopPropagation();
+            const index = currentMenu.findIndex(item => item.id == id);
+            if (index < 0) return;
+
+            const newIndex = index + direction;
+            if (newIndex < 0 || newIndex >= currentMenu.length) return;
+
+            // Swap
+            const temp = currentMenu[index];
+            currentMenu[index] = currentMenu[newIndex];
+            currentMenu[newIndex] = temp;
+
+            // Optimistic UI Update
+            renderMenu();
+
+            // Save new order to backend
+            const ids = currentMenu.map(item => item.id);
+            // Debounce or just save? For simplicity, save immediately.
+            fetch(GAS_URL, {
+                method: 'POST',
+                body: JSON.stringify({ action: 'reorder_menu', ids: ids })
+            }).then(res => res.json())
+                .then(data => {
+                    if (data.status !== 'success') {
+                        alert('並び替えの保存に失敗しました');
+                        loadData(); // Revert
+                    }
+                });
         }
 
         renderSlots();
