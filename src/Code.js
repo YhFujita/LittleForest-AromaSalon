@@ -24,20 +24,23 @@ function doPost(e) {
 
         // --- SECURITY CHECKS (For Reservation) ---
 
-        // 1. Honeypot check (Spam prevention)
-        // If the hidden field 'honeypot' has a value, it's likely a bot.
+        // 1. Honeypot check
         if (data.honeypot) {
-            // Return success to confuse the bot, but do NOT save.
             console.warn('Bot detected via honeypot');
             output.setContent(JSON.stringify({ status: 'success', message: 'Received' }));
             return output;
         }
 
-        // 2. Input Validation
+        // 2. Available Slot Check (Exclusive Lock)
+        // Attempt to update the slot status. If it fails (already taken), return error.
+        if (!SheetUtils.reserveSlot(data.datetime)) {
+            throw new Error('選択された日時は既に予約が入ってしまいました。別の日時を選択してください。');
+        }
+
+        // 3. Input Validation
         if (!data.menu || !data.datetime || !data.name || !data.phone) {
             throw new Error('必須項目が不足しています');
         }
-
         if (data.name.length > 50) throw new Error('名前が長すぎます');
         if (data.phone.length > 20) throw new Error('電話番号の形式が正しくありません');
         if (data.notes && data.notes.length > 500) throw new Error('備考欄は500文字以内で入力してください');
@@ -69,13 +72,16 @@ function doGet(e) {
     var output = ContentService.createTextOutput();
     output.setMimeType(ContentService.MimeType.JSON);
 
-    // Check for 'action' parameter (e.g. ?action=get_menu)
-    if (e.parameter && e.parameter.action === 'get_menu') {
+    // Combine data fetching to single endpoint for performance
+    if (e.parameter && e.parameter.action === 'get_data') {
         try {
             var menuItems = SheetUtils.getMenuItems();
+            var slots = SheetUtils.getAvailableSlots();
+
             output.setContent(JSON.stringify({
                 status: 'success',
-                menu: menuItems
+                menu: menuItems,
+                slots: slots
             }));
         } catch (err) {
             output.setContent(JSON.stringify({
@@ -86,7 +92,26 @@ function doGet(e) {
         return output;
     }
 
+    // Legacy or single fetch support if needed
+    // For simplicity, let's stick to get_data as the main one for the new frontend
+    // if (e.parameter && e.parameter.action === 'get_menu') {
+    //     try {
+    //         var menuItems = SheetUtils.getMenuItems();
+    //         output.setContent(JSON.stringify({
+    //             status: 'success',
+    //             menu: menuItems
+    //         }));
+    //     } catch (err) {
+    //         output.setContent(JSON.stringify({
+    //             status: 'error',
+    //             message: err.toString()
+    //         }));
+    //     }
+    //     return output;
+    // }
+
     // Default response
-    output.setContent(JSON.stringify({ status: 'running', message: 'GAS Backend is active. Use ?action=get_menu to fetch menu.' }));
+    output.setContent(JSON.stringify({ status: 'running', message: 'GAS Backend is active. Use ?action=get_data' }));
     return output;
 }
+```

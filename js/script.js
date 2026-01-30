@@ -9,24 +9,46 @@ window.onload = function () {
     const loading = document.getElementById('loading');
     const success = document.getElementById('successMessage');
     const menuSelect = document.getElementById('menu');
+    const dateSelect = document.getElementById('datetime');
 
-    // Load Menu
-    fetch(GAS_API_URL + '?action=get_menu')
+    // Load Data (Menu + Available Slots)
+    fetch(GAS_API_URL + '?action=get_data')
         .then(response => response.json())
         .then(data => {
-            if (data.status === 'success' && data.menu) {
-                menuSelect.innerHTML = '<option value="" disabled selected>メニューを選択してください</option>';
-                data.menu.forEach(item => {
-                    const option = document.createElement('option');
-                    option.value = item.id;
-                    option.textContent = `${item.name} (${item.duration}分) - ¥${Number(item.price).toLocaleString()}`;
-                    menuSelect.appendChild(option);
-                });
+            if (data.status === 'success') {
+                // Populate Menu
+                if (data.menu) {
+                    menuSelect.innerHTML = '<option value="" disabled selected>メニューを選択してください</option>';
+                    data.menu.forEach(item => {
+                        const option = document.createElement('option');
+                        option.value = item.id;
+                        option.textContent = `${item.name} (${item.duration}分) - ¥${Number(item.price).toLocaleString()}`;
+                        menuSelect.appendChild(option);
+                    });
+                }
+                // Populate Slots
+                if (data.slots) {
+                    dateSelect.innerHTML = '<option value="" disabled selected>希望日時を選択してください</option>';
+                    if (data.slots.length === 0) {
+                        const option = document.createElement('option');
+                        option.disabled = true;
+                        option.textContent = '現在予約できる空き枠がありません';
+                        dateSelect.appendChild(option);
+                    } else {
+                        data.slots.forEach(slot => {
+                            const option = document.createElement('option');
+                            option.value = slot; // "yyyy/MM/dd HH:mm"
+                            option.textContent = slot;
+                            dateSelect.appendChild(option);
+                        });
+                    }
+                }
             }
         })
         .catch(err => {
-            console.error('Failed to load menu', err);
-            menuSelect.innerHTML = '<option value="" disabled selected>メニューの読み込みに失敗しました</option>';
+            console.error('Failed to load data', err);
+            menuSelect.innerHTML = '<option value="" disabled selected>読み込み失敗</option>';
+            dateSelect.innerHTML = '<option value="" disabled selected>読み込み失敗</option>';
         });
 
     form.addEventListener('submit', function (e) {

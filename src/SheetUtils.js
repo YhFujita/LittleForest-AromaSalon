@@ -2,6 +2,7 @@ var SheetUtils = (function () {
     var SPREADSHEET_ID = ''; // ユーザーに設定してもらうか、プロパティスクリプトで管理
     var SHEET_NAME_RESERVATIONS = '予約一覧';
     var SHEET_NAME_MENU = 'メニュー設定';
+    var SHEET_NAME_SLOTS = '予約可能日時';
     var CACHE_KEY_MENU = 'MENU_CACHE';
 
     function getSheet(name) {
@@ -20,6 +21,15 @@ var SheetUtils = (function () {
                 // Add sample data
                 sheet.appendRow(['basic', 'ベーシックコース', '6000', '60', '基本のコースです', '1']);
                 sheet.appendRow(['premium', 'プレミアムコース', '9000', '90', '充実のコースです', '2']);
+            } else if (name === SHEET_NAME_SLOTS) {
+                sheet.appendRow(['日時', 'ステータス']);
+                // Add sample slots
+                var now = new Date();
+                now.setDate(now.getDate() + 1); // Tomorrow
+                now.setHours(10, 0, 0, 0);
+                sheet.appendRow([now, '空き']);
+                now.setHours(13, 0, 0, 0);
+                sheet.appendRow([now, '空き']);
             }
         }
         return sheet;
@@ -50,12 +60,10 @@ var SheetUtils = (function () {
             var cachedMenu = scriptProperties.getProperty(CACHE_KEY_MENU);
 
             if (cachedMenu) {
-                console.log('Returning cached menu');
                 return JSON.parse(cachedMenu);
             }
 
             // If no cache, read from sheet and update cache
-            console.log('Cache miss, reading from sheet');
             return this.updateMenuCache();
         },
 
@@ -86,6 +94,44 @@ var SheetUtils = (function () {
             scriptProperties.setProperty(CACHE_KEY_MENU, JSON.stringify(menuItems));
 
             return menuItems;
+        },
+
+        getAvailableSlots: function () {
+            var sheet = getSheet(SHEET_NAME_SLOTS);
+            var data = sheet.getDataRange().getValues();
+            var headers = data.shift();
+
+            // Filter for "空き" slots
+            var slots = data.filter(function (row) {
+                return row[1] === '空き';
+            }).map(function (row) {
+                return Utilities.formatDate(new Date(row[0]), Session.getScriptTimeZone(), 'yyyy/MM/dd HH:mm');
+            });
+
+            return slots;
+        },
+
+        reserveSlot: function (targetDatetimeStr) {
+            var sheet = getSheet(SHEET_NAME_SLOTS);
+            var data = sheet.getDataRange().getValues();
+            var timeZone = Session.getScriptTimeZone();
+
+            // Find row to update
+            for (var i = 1; i < data.length; i++) { // Skip header
+                var cellDate = new Date(data[i][0]);
+                var cellStatus = data[i][1];
+                var cellDateStr = Utilities.formatDate(cellDate, timeZone, 'yyyy/MM/dd HH:mm');
+
+                if (cellDateStr === targetDatetimeStr) {
+                    if (cellStatus !== '空き') {
+                        return false; // Already reserved
+                    }
+                    // Update status to '予約済'
+                    sheet.getRange(i + 1, 2).setValue('予約済');
+                    return true; // Success
+                }
+            }
+            return false; // Slot not found or invalid
         }
     };
 })();
