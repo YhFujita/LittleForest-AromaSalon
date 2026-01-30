@@ -266,6 +266,47 @@ var SheetUtils = (function () {
             return false;
         },
 
+        updateSlotDatetime: function (currentDatetimeStr, newDateObj) {
+            var sheet = getSheet(SHEET_NAME_SLOTS);
+            var data = sheet.getDataRange().getValues();
+            var timeZone = Session.getScriptTimeZone();
+            var newDateStr = Utilities.formatDate(newDateObj, timeZone, 'yyyy/MM/dd HH:mm');
+
+            // 1. Check for duplicates (exclude the current slot being edited if it was unchanged, but here we check consistency)
+            for (var i = 1; i < data.length; i++) {
+                var d = new Date(data[i][0]);
+                if (!isNaN(d.getTime())) {
+                    var dStr = Utilities.formatDate(d, timeZone, 'yyyy/MM/dd HH:mm');
+                    if (dStr === newDateStr) {
+                        return { success: false, message: 'その日時は既に存在します' };
+                    }
+                }
+            }
+
+            // 2. Find and update
+            for (var i = 1; i < data.length; i++) {
+                var cellDate = new Date(data[i][0]);
+                var cellDateStr = Utilities.formatDate(cellDate, timeZone, 'yyyy/MM/dd HH:mm');
+
+                if (cellDateStr === currentDatetimeStr) {
+                    sheet.getRange(i + 1, 1).setValue(newDateObj);
+
+                    // 3. Sort
+                    var totalRows = sheet.getLastRow();
+                    if (totalRows > 1) {
+                        sheet.getRange(2, 1, totalRows - 1, 2).sort([
+                            { column: 2, ascending: false },
+                            { column: 1, ascending: true }
+                        ]);
+                    }
+
+                    this.updateSlotsCache();
+                    return { success: true };
+                }
+            }
+            return { success: false, message: '対象の予約枠が見つかりませんでした' };
+        },
+
         saveMenuItem: function (item) {
             var sheet = getSheet(SHEET_NAME_MENU);
             var data = sheet.getDataRange().getValues();

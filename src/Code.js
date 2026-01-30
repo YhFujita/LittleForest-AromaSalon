@@ -45,6 +45,16 @@ function doPost(e) {
             return output;
         }
 
+        if (action === 'update_slot_datetime') {
+            var result = SheetUtils.updateSlotDatetime(data.currentDatetime, new Date(data.newDatetime));
+            if (result.success) {
+                output.setContent(JSON.stringify({ status: 'success' }));
+            } else {
+                output.setContent(JSON.stringify({ status: 'error', message: result.message }));
+            }
+            return output;
+        }
+
         if (action === 'delete_slot') {
             if (SheetUtils.deleteSlot(data.datetime)) {
                 output.setContent(JSON.stringify({ status: 'success' }));
@@ -57,6 +67,16 @@ function doPost(e) {
         if (action === 'save_menu') {
             SheetUtils.saveMenuItem(data.item);
             output.setContent(JSON.stringify({ status: 'success' }));
+            return output;
+        }
+
+        if (action === 'add_slots') {
+            try {
+                SheetUtils.addSlots(data.slots);
+                output.setContent(JSON.stringify({ status: 'success' }));
+            } catch (e) {
+                output.setContent(JSON.stringify({ status: 'error', message: e.toString() }));
+            }
             return output;
         }
 
