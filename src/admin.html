@@ -464,7 +464,7 @@
             document.getElementById('menuDuration').value = item.duration;
             document.getElementById('menuSection').value = item.section || '';
             document.getElementById('menuDesc').value = item.menuDesc || item.description;
-            // Order is preserved but hidden
+            document.getElementById('menuOrder').value = item.order; // Preserve order
             document.getElementById('cancelEditBtn').classList.remove('hidden');
             window.scrollTo(0, 0);
         }
@@ -476,7 +476,7 @@
             document.getElementById('menuDuration').value = '';
             document.getElementById('menuSection').value = '';
             document.getElementById('menuDesc').value = '';
-            // document.getElementById('menuOrder').value = '';
+            document.getElementById('menuOrder').value = '';
             document.getElementById('cancelEditBtn').classList.add('hidden');
         }
 
