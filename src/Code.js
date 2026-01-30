@@ -266,11 +266,7 @@ function addSlotsFromSidebar(slots) {
 function sendAdminNotifications(data, reservationId) {
     var props = PropertiesService.getScriptProperties();
     var adminEmail = props.getProperty('ADMIN_EMAIL');
-
-    if (!adminEmail) {
-        console.warn('ADMIN_EMAIL not set. Skipping notifications.');
-        return;
-    }
+    var calendarId = props.getProperty('CALENDAR_ID');
 
     // 1. Get Menu Details for Duration & Name
     var menuItems = SheetUtils.getMenuItems();
@@ -278,38 +274,42 @@ function sendAdminNotifications(data, reservationId) {
     var menuName = selectedMenu ? selectedMenu.name : '不明なメニュー';
     var duration = selectedMenu ? parseInt(selectedMenu.duration, 10) : 60; // Default 60 min
 
-    // 2. Prepare Data
     var startTime = new Date(data.datetime);
     var endTime = new Date(startTime.getTime() + duration * 60000);
-    var subject = '【予約受信】' + data.name + '様 (' + menuName + ')';
-    var body =
-        '新しい予約が入りました。\n\n' +
-        '予約ID: ' + reservationId + '\n' +
-        '日時: ' + Utilities.formatDate(startTime, Session.getScriptTimeZone(), 'yyyy/MM/dd HH:mm') + '\n' +
-        'お名前: ' + data.name + '\n' +
-        '電話番号: ' + data.phone + '\n' +
-        'メニュー: ' + menuName + ' (' + duration + '分)\n' +
-        '備考: ' + (data.notes || 'なし') + '\n\n' +
-        '管理者アプリで確認してください。';
 
-    // 3. Send Email
-    GmailApp.sendEmail(adminEmail, subject, body);
+    // 2. Send Email (if ADMIN_EMAIL is set)
+    if (adminEmail) {
+        var subject = '【予約受信】' + data.name + '様 (' + menuName + ')';
+        var body =
+            '新しい予約が入りました。\n\n' +
+            '予約ID: ' + reservationId + '\n' +
+            '日時: ' + Utilities.formatDate(startTime, Session.getScriptTimeZone(), 'yyyy/MM/dd HH:mm') + '\n' +
+            'お名前: ' + data.name + '\n' +
+            '電話番号: ' + data.phone + '\n' +
+            'メニュー: ' + menuName + ' (' + duration + '分)\n' +
+            '備考: ' + (data.notes || 'なし') + '\n\n' +
+            '管理者アプリで確認してください。';
+        GmailApp.sendEmail(adminEmail, subject, body);
+    } else {
+        console.warn('ADMIN_EMAIL not set. Skipping email notification.');
+    }
 
-    // 4. Add to Google Calendar
-    try {
-        var cal = CalendarApp.getCalendarById(adminEmail);
-        if (!cal) {
-            cal = CalendarApp.getDefaultCalendar();
-            console.warn('Could not find calendar for ' + adminEmail + ', using default calendar.');
+    // 3. Add to Google Calendar (if CALENDAR_ID is set)
+    if (calendarId) {
+        try {
+            var cal = CalendarApp.getCalendarById(calendarId);
+            if (!cal) {
+                console.warn('Could not find calendar for ' + calendarId + '. Skipping event creation.');
+            } else {
+                cal.createEvent('予約: ' + data.name + '様', startTime, endTime, {
+                    description: 'メニュー: ' + menuName + '\n電話: ' + data.phone + '\n備考: ' + data.notes
+                });
+            }
+        } catch (e) {
+            console.error('Calendar Error:', e);
         }
-
-        if (cal) {
-            cal.createEvent('予約: ' + data.name + '様', startTime, endTime, {
-                description: 'メニュー: ' + menuName + '\n電話: ' + data.phone + '\n備考: ' + data.notes
-            });
-        }
-    } catch (e) {
-        console.error('Calendar Error:', e);
+    } else {
+        console.warn('CALENDAR_ID not set. Skipping calendar event.');
     }
 }
 
