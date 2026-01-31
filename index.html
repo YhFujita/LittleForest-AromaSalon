@@ -1,83 +1,74 @@
 <!DOCTYPE html>
-<html>
+<html lang="ja">
 
 <head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
-    <title>予約フォーム</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Little Forest | 整体・アロママッサージ</title>
     <link rel="stylesheet" href="css/style.css">
 </head>
 
 <body>
-    <div class="main-container">
-        <div class="glass-card">
-            <header>
-                <h1>Reservation</h1>
-                <p>ご予約はこちらから</p>
-            </header>
 
-            <form id="reservationForm">
-                <div class="form-group">
-                    <label for="menu">メニュー</label>
-                    <div class="select-wrapper">
-                        <select id="menu" name="menu" required>
-                            <option value="" disabled selected>メニューを読み込み中...</option>
-                        </select>
-                    </div>
-                </div>
-
-                <div class="form-group">
-                    <label for="datetime">ご希望日時</label>
-                    <div class="select-wrapper">
-                        <select id="datetime" name="datetime" required>
-                            <option value="" disabled selected>日時を読み込み中...</option>
-                        </select>
-                    </div>
-                </div>
-
-                <div class="form-group">
-                    <label for="name">お名前</label>
-                    <input type="text" id="name" name="name" placeholder="山田 花子" required>
-                </div>
-
-                <div class="form-group">
-                    <label for="phone">電話番号</label>
-                    <input type="tel" id="phone" name="phone" placeholder="09012345678" required>
-                </div>
-
-                <div class="form-group">
-                    <label for="notes">備考</label>
-                    <textarea id="notes" name="notes" rows="3" placeholder="ご要望があればご記入ください"></textarea>
-                </div>
-
-                <!-- HONEYPOT FIELD (Hidden from humans, visible to bots) -->
-                <div style="display:none; opacity:0; position:absolute; left:-9999px;">
-                    <input type="text" id="honeypot" name="honeypot" tabindex="-1" autocomplete="off">
-                </div>
-
-                <button type="submit" id="submitBtn">
-                    <span>予約を確定する</span>
-                </button>
-            </form>
-
-            <div id="loading" class="hidden">
-                <div class="spinner"></div>
-                <p>送信中...</p>
-            </div>
-
-            <div id="successMessage" class="hidden">
-                <svg viewBox="0 0 24 24" class="success-icon">
-                    <path fill="currentColor" d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z" />
-                </svg>
-                <h2>予約完了</h2>
-                <p>ご予約ありがとうございます。<br>確認のご連絡をお待ちください。</p>
-                <button id="closeBtn" onclick="liff.closeWindow()">閉じる</button>
-            </div>
+    <nav class="navbar">
+        <a href="index.html" class="logo">Little Forest</a>
+        <div class="nav-links">
+            <a href="reservation.html">ご予約</a>
+            <a href="legal.html">規約・ポリシー</a>
         </div>
+    </nav>
+
+    <div class="container">
+        <header class="hero">
+            <h1>心と体を整える<br>静かな森へようこそ</h1>
+            <p>Little Forestは、日々の喧騒を忘れ、深いリラックスの中で本来の自分を取り戻すためのプライベートサロンです。</p>
+            <br>
+            <a href="reservation.html" class="btn-primary">ご予約はこちら</a>
+        </header>
+
+        <section class="section">
+            <h2>Menu</h2>
+            <div class="features-grid">
+                <div class="feature-card">
+                    <div class="feature-icon">🌿</div>
+                    <h3>整体コース</h3>
+                    <p>体の歪みを整え、自然治癒力を高めます。慢性的な肩こりや腰痛にお悩みの方に。</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">💐</div>
+                    <h3>アロマコース</h3>
+                    <p>厳選された精油の香りと優しいタッチで、心身の緊張を解きほぐします。</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">🕰️</div>
+                    <h3>プライベート空間</h3>
+                    <p>完全予約制。あなただけの特別な時間と空間をご用意してお待ちしております。</p>
+                </div>
+            </div>
+        </section>
+
+        <section class="section">
+            <h2>Access & Info</h2>
+            <div class="glass-card" style="text-align: center; max-width: 600px; margin: 0 auto;">
+                <p><strong>Little Forest</strong></p>
+                <br>
+                <p>〒100-0000<br>東京都〇〇区〇〇 1-2-3</p>
+                <br>
+                <p>営業時間: 10:00 - 20:00</p>
+                <p>定休日: 不定休</p>
+            </div>
+        </section>
     </div>
 
-    <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
-    <script src="js/script.js"></script>
+    <footer>
+        <p>&copy; 2024 Little Forest</p>
+        <br>
+        <div style="font-size: 12px;">
+            <a href="legal.html#terms">利用規約</a> |
+            <a href="legal.html#privacy">プライバシーポリシー</a>
+        </div>
+    </footer>
+
 </body>
 
 </html>
