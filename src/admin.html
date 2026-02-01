@@ -666,9 +666,16 @@
                 return;
             }
 
-            const newDatetime = newDate.replace(/-/g, '/') + ' ' + newTime;
+            // ハイフン区切りのまま送信 (YYYY-MM-DD HH:mm) -> GAS側でパース
+            const newDatetime = newDate + ' ' + newTime;
 
             if (!confirm('変更を保存しますか？\n（カレンダーも更新されます）')) return;
+
+            // UIフィードバック開始
+            showMessage('変更を保存中...', false);
+            const saveBtn = document.querySelector('#reservationEditForm button.btn-primary');
+            saveBtn.disabled = true;
+            saveBtn.textContent = '保存中...';
 
             fetch(GAS_URL, {
                 method: 'POST',
@@ -693,7 +700,12 @@
                 })
                 .catch(e => {
                     console.error(e);
-                    showMessage('エラー: ' + e.message, true);
+                    showMessage('エラーが発生しました: ' + e.message, true);
+                })
+                .finally(() => {
+                    // ボタンの状態を戻す
+                    saveBtn.disabled = false;
+                    saveBtn.textContent = '変更保存';
                 });
         }
 
