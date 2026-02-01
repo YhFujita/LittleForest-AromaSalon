@@ -45,19 +45,20 @@ window.onload = function () {
                     let currentGroup = null;
 
                     data.menu.forEach(item => {
-                        // Check if section changed
+                        // Check if section changed (only if new section is provided)
                         const itemSection = item.section || '';
 
-                        if (itemSection !== currentSection) {
-                            currentSection = itemSection;
-                            if (currentSection) {
+                        if (itemSection) {
+                            // If a new section is defined, switch to it
+                            if (itemSection !== currentSection) {
+                                currentSection = itemSection;
                                 currentGroup = document.createElement('optgroup');
                                 currentGroup.label = currentSection;
                                 menuSelect.appendChild(currentGroup);
-                            } else {
-                                currentGroup = null; // Reset to root
                             }
                         }
+                        // If itemSection is empty, we keep the currentGroup (inherit)
+                        // If no group has been started yet, currentGroup remains null
 
                         const option = document.createElement('option');
                         option.value = item.id;
