@@ -153,20 +153,27 @@ function doPost(e) {
                                 var selectedMenu = menuItems.find(function (m) { return m.id === menuId; });
                                 var duration = selectedMenu ? parseInt(selectedMenu.duration, 10) : 60;
 
-                                var newStartTime = new Date(data.newDatetime);
+                                // SheetUtils.updateReservationから返されるパース済みの日付を使用
+                                var newStartTime = res.newDate;
                                 var newEndTime = new Date(newStartTime.getTime() + duration * 60000);
 
                                 var cal = CalendarApp.getCalendarById(calendarId);
                                 var evt = cal.getEventById(res.googleEventId);
                                 if (evt) {
                                     evt.setTime(newStartTime, newEndTime);
-                                    if (selectedMenu) {
-                                        // Update description/title if menu changed? 
-                                        // For simplicity, maybe just time for now unless requested.
-                                        // But keeping it synced is better.
-                                        var currentDesc = evt.getDescription();
-                                        // Replacing menu name in description is complex without parsing.
-                                        // Let's just update time.
+                                    // メニューが変更された場合、説明も更新
+                                    if (selectedMenu && data.newMenuId) {
+                                        // 予約詳細を取得して説明を再構築
+                                        var resDetail = SheetUtils.getReservation(data.reservationId);
+                                        if (resDetail) {
+                                            // シートから名前、電話、備考を取得
+                                            var sheet = SpreadsheetApp.openById(PropertiesService.getScriptProperties().getProperty('SPREADSHEET_ID')).getSheetByName('予約一覧');
+                                            var rowData = sheet.getRange(resDetail.row, 1, 1, 10).getValues()[0];
+                                            var phone = rowData[6] || '';
+                                            var notes = rowData[7] || '';
+                                            var newDesc = 'メニュー: ' + selectedMenu.name + '\n電話: ' + phone + '\n備考: ' + notes;
+                                            evt.setDescription(newDesc);
+                                        }
                                     }
                                 }
                             } catch (e) { console.error('Calendar Update Error:', e); }

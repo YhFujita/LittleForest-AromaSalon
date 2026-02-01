@@ -76,6 +76,29 @@ var SheetUtils = (function () {
         return y + '年' + m + '月' + d + '日(' + day + ') ' + H + ':' + M;
     }
 
+    // 日付文字列のパース用ヘルパー関数
+    // "YYYY/MM/DD HH:mm" または "YYYY-MM-DD HH:mm" 形式の文字列をDateオブジェクトに変換
+    function parseDatetimeString(datetimeStr) {
+        if (!datetimeStr) return null;
+        // スラッシュをハイフンに統一してからパース
+        var normalized = String(datetimeStr).replace(/\//g, '-');
+        // "YYYY-MM-DD HH:mm" 形式を分解
+        var match = normalized.match(/(\d{4})-(\d{1,2})-(\d{1,2})\s+(\d{1,2}):(\d{2})/);
+        if (match) {
+            return new Date(
+                parseInt(match[1], 10),
+                parseInt(match[2], 10) - 1,
+                parseInt(match[3], 10),
+                parseInt(match[4], 10),
+                parseInt(match[5], 10)
+            );
+        }
+        // フォールバック: 通常のパース
+        var d = new Date(datetimeStr);
+        if (!isNaN(d.getTime())) return d;
+        return null;
+    }
+
     return {
         appendReservation: function (data) {
             var sheet = getSheet(SHEET_NAME_RESERVATIONS);
@@ -554,7 +577,13 @@ var SheetUtils = (function () {
             var sheet = getSheet(SHEET_NAME_RESERVATIONS);
             var timeZone = Session.getScriptTimeZone();
             var currentDatetimeStr = Utilities.formatDate(res.date, timeZone, 'yyyy/MM/dd HH:mm');
-            var newDatetimeStr = Utilities.formatDate(new Date(newDatetime), timeZone, 'yyyy/MM/dd HH:mm');
+
+            // parseDatetimeString を使用して日付をパース
+            var newDateObj = parseDatetimeString(newDatetime);
+            if (!newDateObj) {
+                return { success: false, message: '日時の形式が正しくありません: ' + newDatetime };
+            }
+            var newDatetimeStr = Utilities.formatDate(newDateObj, timeZone, 'yyyy/MM/dd HH:mm');
 
             // 1. Check if new slot is available (unless it's the same time)
             if (currentDatetimeStr !== newDatetimeStr) {
@@ -568,19 +597,15 @@ var SheetUtils = (function () {
             // 2. Update Reservation Data
             var row = res.row;
             // Update Date (Col A)
-            sheet.getRange(row, 1).setValue(formatDateJP(new Date(newDatetime)));
+            sheet.getRange(row, 1).setValue(formatDateJP(newDateObj));
 
             // Update Menu & Price if changed
             if (newMenuId && newMenuId !== res.menu) {
                 var menuItems = this.getMenuItems();
                 var selectedMenu = menuItems.find(function (item) { return item.id === newMenuId; });
                 if (selectedMenu) {
-                    sheet.getRange(row, 4).setValue(newMenuId); // ID stored in col D?
-                    // Wait, original appendReservation stores `data.menu` which is ID? 
-                    // Looking at appendRow: `data.menu`
-                    // Line 101: data.menu. 
-                    // So yes, it stores the ID.
-                    sheet.getRange(row, 5).setValue(selectedMenu.price);
+                    sheet.getRange(row, 4).setValue(newMenuId); // メニューID (Col D)
+                    sheet.getRange(row, 5).setValue(selectedMenu.price); // 価格 (Col E)
                 }
             }
 
@@ -588,7 +613,7 @@ var SheetUtils = (function () {
                 success: true,
                 googleEventId: res.googleEventId,
                 oldDate: res.date,
-                newDate: new Date(newDatetime)
+                newDate: newDateObj
             };
         }
     };
