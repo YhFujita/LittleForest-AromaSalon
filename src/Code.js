@@ -159,9 +159,11 @@ function doPost(e) {
                                         var resDetail = SheetUtils.getReservation(data.reservationId);
                                         if (resDetail) {
                                             var sheet = SpreadsheetApp.openById(PropertiesService.getScriptProperties().getProperty('SPREADSHEET_ID')).getSheetByName('予約一覧');
-                                            var rowData = sheet.getRange(resDetail.row, 1, 1, 10).getValues()[0];
-                                            var phone = rowData[6] || '';
-                                            var notes = rowData[7] || '';
+                                            // 予約一覧シートの構造変更に対応 (列数増加)
+                                            // 電話番号: J列 (Index 9), 備考: K列 (Index 10)
+                                            var rowData = sheet.getRange(resDetail.row, 1, 1, 13).getValues()[0];
+                                            var phone = rowData[9] || '';
+                                            var notes = rowData[10] || '';
                                             var newDesc = 'メニュー: ' + selectedMenu.name + '\n電話: ' + phone + '\n備考: ' + notes;
                                             evt.setDescription(newDesc);
                                             console.log('Calendar Description Updated');
