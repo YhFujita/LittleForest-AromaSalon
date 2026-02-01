@@ -409,20 +409,26 @@ var SheetUtils = (function () {
                 var row = data[i];
                 // Check if date is valid
                 var d = new Date(row[0]);
+                if (isNaN(d.getTime())) {
+                    // Try parsing Japanese format: "yyyy年M月d日(day) H:m"
+                    // Regex to capture digits. Ignore the day of week char.
+                    var match = String(row[0]).match(/(\d+)年(\d+)月(\d+)日\s*\(.\)\s*(\d+):(\d+)/);
+                    if (match) {
+                        d = new Date(
+                            parseInt(match[1], 10),
+                            parseInt(match[2], 10) - 1,
+                            parseInt(match[3], 10),
+                            parseInt(match[4], 10),
+                            parseInt(match[5], 10)
+                        );
+                    }
+                }
                 if (isNaN(d.getTime())) continue;
-
-                // Only include '受付' (Active) or 'キャンセル' (Cancelled)? 
-                // User might want to see cancellations too, but maybe separate or mark them.
-                // Let's return all, and filter in frontend or let frontend show status.
-                // But for now, focusing on active ones for management is safer to avoid clutter?
-                // Request says "Reservation Management", usually implies active ones.
-                // However, user might want to delete (cancel) an active one.
-                // Let's return all rows but sort by date.
 
                 // Columns: 0:Date, 1:ID, 2:Name, 3:MenuID, 4:Price, 5:Timestamp, 6:Phone, 7:Notes, 8:Status, 9:GoogleEventID
                 results.push({
                     date: Utilities.formatDate(d, timeZone, 'yyyy/MM/dd HH:mm'),
-                    displayDate: formatDateJP(d),
+                    displayDate: row[0], // Use original string as display or re-format? Original is fine if consistent.
                     id: row[1],
                     name: row[2],
                     menuId: row[3],
@@ -476,9 +482,22 @@ var SheetUtils = (function () {
 
             for (var i = 1; i < data.length; i++) {
                 if (data[i][1] == reservationId) {
+                    var d = new Date(data[i][0]);
+                    if (isNaN(d.getTime())) {
+                        var match = String(data[i][0]).match(/(\d+)年(\d+)月(\d+)日\s*\(.\)\s*(\d+):(\d+)/);
+                        if (match) {
+                            d = new Date(
+                                parseInt(match[1], 10),
+                                parseInt(match[2], 10) - 1,
+                                parseInt(match[3], 10),
+                                parseInt(match[4], 10),
+                                parseInt(match[5], 10)
+                            );
+                        }
+                    }
                     return {
                         row: i + 1,
-                        date: new Date(data[i][0]),
+                        date: d,
                         id: data[i][1],
                         menu: data[i][3],
                         status: data[i][8],
@@ -501,6 +520,18 @@ var SheetUtils = (function () {
 
                     // 2. Release Slot
                     var date = new Date(data[i][0]);
+                    if (isNaN(date.getTime())) {
+                        var match = String(data[i][0]).match(/(\d+)年(\d+)月(\d+)日\s*\(.\)\s*(\d+):(\d+)/);
+                        if (match) {
+                            date = new Date(
+                                parseInt(match[1], 10),
+                                parseInt(match[2], 10) - 1,
+                                parseInt(match[3], 10),
+                                parseInt(match[4], 10),
+                                parseInt(match[5], 10)
+                            );
+                        }
+                    }
                     var dateStr = Utilities.formatDate(date, timeZone, 'yyyy/MM/dd HH:mm');
                     this.updateSlotStatus(dateStr, '空き');
 
