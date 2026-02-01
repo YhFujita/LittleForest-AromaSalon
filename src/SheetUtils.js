@@ -41,7 +41,7 @@ var SheetUtils = (function () {
             sheet = ss.insertSheet(name);
             if (name === SHEET_NAME_RESERVATIONS) {
                 // Modified header to include '金額', swapped Date columns
-                sheet.appendRow(['希望日時', '予約ID', '予約者名', 'メニュー', '金額', '送信日時', '電話番号', '備考', 'ステータス']);
+                sheet.appendRow(['希望日時', '予約ID', '予約者名', 'メニュー', '金額', '送信日時', '電話番号', '備考', 'ステータス', 'GoogleEventID']);
             } else if (name === SHEET_NAME_MENU) {
                 sheet.appendRow(['ID', 'メニュー名', '価格', '所要時間(分)', '説明', '表示順', 'カテゴリタイトル']);
                 // Add sample data
@@ -103,7 +103,8 @@ var SheetUtils = (function () {
                 formattedTimestamp, // Recorded at (F Column)
                 "'" + data.phone,
                 data.notes,
-                '受付'
+                '受付',
+                data.googleEventId || '' // GoogleEventID (J Column)
             ]);
             return id;
         },
@@ -397,6 +398,51 @@ var SheetUtils = (function () {
             return this.updateMenuCache();
         },
 
+        getReservations: function () {
+            var sheet = getSheet(SHEET_NAME_RESERVATIONS);
+            var data = sheet.getDataRange().getValues();
+            var timeZone = Session.getScriptTimeZone();
+            var results = [];
+
+            // Skip header (row 1)
+            for (var i = 1; i < data.length; i++) {
+                var row = data[i];
+                // Check if date is valid
+                var d = new Date(row[0]);
+                if (isNaN(d.getTime())) continue;
+
+                // Only include '受付' (Active) or 'キャンセル' (Cancelled)? 
+                // User might want to see cancellations too, but maybe separate or mark them.
+                // Let's return all, and filter in frontend or let frontend show status.
+                // But for now, focusing on active ones for management is safer to avoid clutter?
+                // Request says "Reservation Management", usually implies active ones.
+                // However, user might want to delete (cancel) an active one.
+                // Let's return all rows but sort by date.
+
+                // Columns: 0:Date, 1:ID, 2:Name, 3:MenuID, 4:Price, 5:Timestamp, 6:Phone, 7:Notes, 8:Status, 9:GoogleEventID
+                results.push({
+                    date: Utilities.formatDate(d, timeZone, 'yyyy/MM/dd HH:mm'),
+                    displayDate: formatDateJP(d),
+                    id: row[1],
+                    name: row[2],
+                    menuId: row[3],
+                    price: row[4],
+                    phone: row[6],
+                    notes: row[7],
+                    status: row[8],
+                    googleEventId: row[9] || ''
+                });
+            }
+
+            // Sort by Date Descending (Newest first) or Ascending (Future first)?
+            // Usually Admin wants to see upcoming. Ascending.
+            results.sort(function (a, b) {
+                return a.date.localeCompare(b.date);
+            });
+
+            return results;
+        },
+
         deleteMenuItem: function (id) {
             var sheet = getSheet(SHEET_NAME_MENU);
             var data = sheet.getDataRange().getValues();
@@ -409,6 +455,110 @@ var SheetUtils = (function () {
                 }
             }
             return false;
+        },
+
+        setReservationGoogleEventId: function (reservationId, eventId) {
+            var sheet = getSheet(SHEET_NAME_RESERVATIONS);
+            var data = sheet.getDataRange().getValues();
+
+            for (var i = 1; i < data.length; i++) {
+                if (data[i][1] == reservationId) { // Column B is ID
+                    sheet.getRange(i + 1, 10).setValue(eventId); // Column J is GoogleEventID
+                    return true;
+                }
+            }
+            return false;
+        },
+
+        getReservation: function (reservationId) {
+            var sheet = getSheet(SHEET_NAME_RESERVATIONS);
+            var data = sheet.getDataRange().getValues();
+
+            for (var i = 1; i < data.length; i++) {
+                if (data[i][1] == reservationId) {
+                    return {
+                        row: i + 1,
+                        date: new Date(data[i][0]),
+                        id: data[i][1],
+                        menu: data[i][3],
+                        status: data[i][8],
+                        googleEventId: data[i][9]
+                    };
+                }
+            }
+            return null;
+        },
+
+        cancelReservation: function (reservationId) {
+            var sheet = getSheet(SHEET_NAME_RESERVATIONS);
+            var data = sheet.getDataRange().getValues();
+            var timeZone = Session.getScriptTimeZone();
+
+            for (var i = 1; i < data.length; i++) {
+                if (data[i][1] == reservationId) {
+                    // 1. Update Status
+                    sheet.getRange(i + 1, 9).setValue('キャンセル');
+
+                    // 2. Release Slot
+                    var date = new Date(data[i][0]);
+                    var dateStr = Utilities.formatDate(date, timeZone, 'yyyy/MM/dd HH:mm');
+                    this.updateSlotStatus(dateStr, '空き');
+
+                    return {
+                        success: true,
+                        googleEventId: data[i][9],
+                        date: dateStr,
+                        menu: data[i][3]
+                    };
+                }
+            }
+            return { success: false, message: 'Reservation not found' };
+        },
+
+        updateReservation: function (reservationId, newDatetime, newMenuId) {
+            var res = this.getReservation(reservationId);
+            if (!res) return { success: false, message: 'Reservation not found' };
+
+            var sheet = getSheet(SHEET_NAME_RESERVATIONS);
+            var timeZone = Session.getScriptTimeZone();
+            var currentDatetimeStr = Utilities.formatDate(res.date, timeZone, 'yyyy/MM/dd HH:mm');
+            var newDatetimeStr = Utilities.formatDate(new Date(newDatetime), timeZone, 'yyyy/MM/dd HH:mm');
+
+            // 1. Check if new slot is available (unless it's the same time)
+            if (currentDatetimeStr !== newDatetimeStr) {
+                if (!this.reserveSlot(newDatetimeStr)) {
+                    return { success: false, message: '変更先の日時は既に埋まっています。' };
+                }
+                // Release old slot
+                this.updateSlotStatus(currentDatetimeStr, '空き');
+            }
+
+            // 2. Update Reservation Data
+            var row = res.row;
+            // Update Date (Col A)
+            sheet.getRange(row, 1).setValue(formatDateJP(new Date(newDatetime)));
+
+            // Update Menu & Price if changed
+            if (newMenuId && newMenuId !== res.menu) {
+                var menuItems = this.getMenuItems();
+                var selectedMenu = menuItems.find(function (item) { return item.id === newMenuId; });
+                if (selectedMenu) {
+                    sheet.getRange(row, 4).setValue(newMenuId); // ID stored in col D?
+                    // Wait, original appendReservation stores `data.menu` which is ID? 
+                    // Looking at appendRow: `data.menu`
+                    // Line 101: data.menu. 
+                    // So yes, it stores the ID.
+                    sheet.getRange(row, 5).setValue(selectedMenu.price);
+                }
+            }
+
+            return {
+                success: true,
+                googleEventId: res.googleEventId,
+                oldDate: res.date,
+                newDate: new Date(newDatetime)
+            };
         }
     };
+
 })();

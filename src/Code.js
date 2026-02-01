@@ -32,7 +32,8 @@ function doPost(e) {
             // In a real app, validate token. Here we rely on the frontend having passed login.
             var menu = SheetUtils.getMenuItems();
             var slots = SheetUtils.getAvailableSlots();
-            output.setContent(JSON.stringify({ status: 'success', menu: menu, slots: slots }));
+            var reservations = SheetUtils.getReservations();
+            output.setContent(JSON.stringify({ status: 'success', menu: menu, slots: slots, reservations: reservations }));
             return output;
         }
 
@@ -95,6 +96,92 @@ function doPost(e) {
             return output;
         }
 
+        if (action === 'cancel_reservation') {
+            try {
+                var res = SheetUtils.cancelReservation(data.reservationId);
+                if (res.success) {
+                    if (res.googleEventId) {
+                        var props = PropertiesService.getScriptProperties();
+                        var calendarId = props.getProperty('CALENDAR_ID');
+                        if (calendarId) {
+                            try {
+                                var cal = CalendarApp.getCalendarById(calendarId);
+                                var evt = cal.getEventById(res.googleEventId);
+                                if (evt) evt.deleteEvent();
+                            } catch (e) { console.error('Calendar Delete Error:', e); }
+                        }
+                    }
+                    output.setContent(JSON.stringify({ status: 'success' }));
+                } else {
+                    output.setContent(JSON.stringify({ status: 'error', message: res.message }));
+                }
+            } catch (e) {
+                output.setContent(JSON.stringify({ status: 'error', message: e.toString() }));
+            }
+            return output;
+        }
+
+        if (action === 'update_reservation') {
+            try {
+                // data: { reservationId, newDatetime, newMenuId }
+                var res = SheetUtils.updateReservation(data.reservationId, data.newDatetime, data.newMenuId);
+                if (res.success) {
+                    if (res.googleEventId) {
+                        var props = PropertiesService.getScriptProperties();
+                        var calendarId = props.getProperty('CALENDAR_ID');
+                        if (calendarId) {
+                            try {
+                                var menuItems = SheetUtils.getMenuItems();
+                                // If menu changed, get new duration. If not, we might need to look up current menu?
+                                // Simplified: If newMenuId provided, use it. If not, we might lack duration info 
+                                // if we don't fetch the existing reservation's menu.
+                                // SheetUtils.updateReservation handles the sheet update.
+                                // Let's just assume for now we can get the duration easily if we know the menu.
+                                // If newMenuId is null, use existing menu? Code.js doesn't know existing menu ID easily without query.
+                                // Let's just fetch the reservation to be sure or trust the input?
+                                // Better: SheetUtils already looked it up. Let's make SheetUtils return the menu ID used?
+                                // For now, let's just use a default or fetch if passed.
+                                // The user likely passes newMenuId if they want to change it.
+
+                                var menuId = data.newMenuId;
+                                if (!menuId) {
+                                    // If not provided, we need to find what the current menu is to calculate end time.
+                                    var currentRes = SheetUtils.getReservation(data.reservationId);
+                                    if (currentRes) menuId = currentRes.menu;
+                                }
+
+                                var selectedMenu = menuItems.find(function (m) { return m.id === menuId; });
+                                var duration = selectedMenu ? parseInt(selectedMenu.duration, 10) : 60;
+
+                                var newStartTime = new Date(data.newDatetime);
+                                var newEndTime = new Date(newStartTime.getTime() + duration * 60000);
+
+                                var cal = CalendarApp.getCalendarById(calendarId);
+                                var evt = cal.getEventById(res.googleEventId);
+                                if (evt) {
+                                    evt.setTime(newStartTime, newEndTime);
+                                    if (selectedMenu) {
+                                        // Update description/title if menu changed? 
+                                        // For simplicity, maybe just time for now unless requested.
+                                        // But keeping it synced is better.
+                                        var currentDesc = evt.getDescription();
+                                        // Replacing menu name in description is complex without parsing.
+                                        // Let's just update time.
+                                    }
+                                }
+                            } catch (e) { console.error('Calendar Update Error:', e); }
+                        }
+                    }
+                    output.setContent(JSON.stringify({ status: 'success' }));
+                } else {
+                    output.setContent(JSON.stringify({ status: 'error', message: res.message }));
+                }
+            } catch (e) {
+                output.setContent(JSON.stringify({ status: 'error', message: e.toString() }));
+            }
+            return output;
+        }
+
 
         // If 'action' is specified, handle specific tasks (like refreshing cache)
         if (action === 'refresh_menu') {
@@ -134,11 +221,16 @@ function doPost(e) {
         var id = SheetUtils.appendReservation(data);
 
         // --- Notifications ---
+        var eventId = null;
         try {
-            sendAdminNotifications(data, id);
+            eventId = sendAdminNotifications(data, id);
         } catch (e) {
             console.error('Notification Error:', e);
             // Don't fail the request just because notification failed, but log it.
+        }
+
+        if (eventId) {
+            SheetUtils.setReservationGoogleEventId(id, eventId);
         }
 
         // --- LINE Notification to User ---
@@ -310,15 +402,17 @@ function sendAdminNotifications(data, reservationId) {
     }
 
     // 3. Add to Google Calendar (if CALENDAR_ID is set)
+    var eventId = null;
     if (calendarId) {
         try {
             var cal = CalendarApp.getCalendarById(calendarId);
             if (!cal) {
                 console.warn('Could not find calendar for ' + calendarId + '. Skipping event creation.');
             } else {
-                cal.createEvent('予約: ' + data.name + '様', startTime, endTime, {
+                var event = cal.createEvent('予約: ' + data.name + '様', startTime, endTime, {
                     description: 'メニュー: ' + menuName + '\n電話: ' + data.phone + '\n備考: ' + data.notes
                 });
+                eventId = event.getId();
             }
         } catch (e) {
             console.error('Calendar Error:', e);
@@ -326,6 +420,7 @@ function sendAdminNotifications(data, reservationId) {
     } else {
         console.warn('CALENDAR_ID not set. Skipping calendar event.');
     }
+    return eventId;
 }
 
 /**

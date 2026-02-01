@@ -177,6 +177,7 @@
         <div class="tabs">
             <div class="tab active" onclick="switchTab('slots')">予約枠管理</div>
             <div class="tab" onclick="switchTab('menu')">メニュー管理</div>
+            <div class="tab" onclick="switchTab('reservations')">予約管理</div>
         </div>
 
         <!-- Slots Management -->
@@ -221,6 +222,33 @@
                 <button class="btn-secondary hidden" id="cancelEditBtn" onclick="resetMenuForm()">キャンセル</button>
             </div>
             <div id="menuList" class="item-list">Loading...</div>
+        </div>
+
+        <!-- Reservations Management -->
+        <div id="reservationsTab" class="hidden">
+            <!-- Reservation Edit Form (Hidden by default) -->
+            <div id="reservationEditForm" class="form-group hidden"
+                style="background: #e9ecef; padding: 15px; border-radius: 4px; margin-bottom: 20px; border: 1px solid #ced4da;">
+                <h3>予約変更</h3>
+                <p id="editingResDisplay" style="font-weight:bold;"></p>
+                <input type="hidden" id="editingResId">
+
+                <label>新しい日時</label>
+                <input type="date" id="editResDate">
+                <input type="time" id="editResTime" step="1800">
+
+                <label>メニュー変更</label>
+                <select id="editResMenu">
+                    <!-- Populated by JS -->
+                </select>
+
+                <div style="display: flex; gap: 10px; margin-top: 10px;">
+                    <button class="btn-primary" onclick="saveReservationEdit()">変更保存</button>
+                    <button class="btn-secondary" onclick="closeReservationEdit()">キャンセル</button>
+                </div>
+            </div>
+
+            <div id="reservationsList" class="item-list">Loading...</div>
         </div>
     </div>
 
@@ -281,6 +309,7 @@
         // --- Data Loading ---
         let currentSlots = [];
         let currentMenu = [];
+        let currentReservations = [];
 
         function loadData() {
             // Fetch all data including admin specific view if possible
@@ -290,8 +319,10 @@
                     if (data.status === 'success') {
                         currentMenu = data.menu;
                         currentSlots = data.slots;
+                        currentReservations = data.reservations || [];
                         renderSlots();
                         renderMenu();
+                        renderReservations();
                     }
                 });
         }
@@ -304,19 +335,24 @@
             if (tabName === 'slots') {
                 document.getElementById('slotsTab').classList.remove('hidden');
                 document.getElementById('menuTab').classList.add('hidden');
-            } else {
-                document.getElementById('slotsTab').classList.add('hidden');
-                document.getElementById('menuTab').classList.remove('hidden');
+            else if (tabName === 'menu') {
+                    document.getElementById('slotsTab').classList.add('hidden');
+                    document.getElementById('menuTab').classList.remove('hidden');
+                    document.getElementById('reservationsTab').classList.add('hidden');
+                } else if (tabName === 'reservations') {
+                    document.getElementById('slotsTab').classList.add('hidden');
+                    document.getElementById('menuTab').classList.add('hidden');
+                    document.getElementById('reservationsTab').classList.remove('hidden');
+                }
             }
-        }
 
-        // --- Slots ---
-        function renderSlots() {
-            const list = document.getElementById('slotsList');
-            list.innerHTML = '';
-            currentSlots.forEach(slot => {
-                const li = document.createElement('li');
-                li.innerHTML = `
+            // --- Slots ---
+            function renderSlots() {
+                const list = document.getElementById('slotsList');
+                list.innerHTML = '';
+                currentSlots.forEach(slot => {
+                    const li = document.createElement('li');
+                    li.innerHTML = `
             <div class="item-info">
                 <strong>${slot.display}</strong>
                 <br>
@@ -327,116 +363,116 @@
                 <button class="btn-sm btn-danger" onclick="deleteSlot('${slot.value}')">削除</button>
             </div>
             `;
-                list.appendChild(li);
-            });
-        }
-
-        function openSlotEdit(value, display) {
-            document.getElementById('slotEditForm').classList.remove('hidden');
-            document.getElementById('editingSlotTargetDisplay').textContent = "変更対象: " + display;
-            document.getElementById('editingSlotTargetValue').value = value;
-
-            // Parse current value (yyyy/MM/dd HH:mm) to set default inputs
-            // "2026/01/30 10:00"
-            const parts = value.split(' ');
-            if (parts.length === 2) {
-                document.getElementById('editSlotDate').value = parts[0].replace(/\//g, '-');
-                document.getElementById('editSlotTime').value = parts[1];
-            }
-            window.scrollTo(0, 0);
-        }
-
-        function cancelSlotEdit() {
-            document.getElementById('slotEditForm').classList.add('hidden');
-            document.getElementById('editingSlotTargetValue').value = '';
-        }
-
-        function saveSlotEdit() {
-            const currentDatetime = document.getElementById('editingSlotTargetValue').value;
-            const newDate = document.getElementById('editSlotDate').value;
-            const newTime = document.getElementById('editSlotTime').value;
-
-            if (!newDate || !newTime) {
-                alert('日付と時間を入力してください');
-                return;
-            }
-
-            const newDatetime = newDate + ' ' + newTime; // Needs to be constructed as valid Date string
-
-            fetch(GAS_URL, {
-                method: 'POST',
-                body: JSON.stringify({
-                    action: 'update_slot_datetime',
-                    currentDatetime: currentDatetime,
-                    newDatetime: newDatetime
-                })
-            })
-                .then(res => res.json())
-                .then(data => {
-                    if (data.status === 'success') {
-                        showMessage('日時を変更しました');
-                        cancelSlotEdit();
-                        loadData();
-                    } else {
-                        showMessage('エラー: ' + data.message, true);
-                    }
+                    list.appendChild(li);
                 });
-        }
-
-        function addSlot() {
-            const d = document.getElementById('newSlotDate').value;
-            const t = document.getElementById('newSlotTime').value;
-            if (!d || !t) {
-                alert('日付と時間を入力してください');
-                return;
             }
 
-            // Convert YYYY-MM-DD to YYYY/MM/DD for better compatibility with GAS new Date()
-            const dateTimeStr = d.replace(/-/g, '/') + ' ' + t;
+            function openSlotEdit(value, display) {
+                document.getElementById('slotEditForm').classList.remove('hidden');
+                document.getElementById('editingSlotTargetDisplay').textContent = "変更対象: " + display;
+                document.getElementById('editingSlotTargetValue').value = value;
 
-            fetch(GAS_URL, {
-                method: 'POST',
-                body: JSON.stringify({ action: 'add_slots', slots: [dateTimeStr] })
-            }).then(res => res.json())
-                .then(data => {
-                    if (data.status === 'success') {
-                        showMessage('追加しました');
-                        loadData();
-                    } else {
-                        showMessage('エラー: ' + (data.message || 'Unknown'), true);
-                    }
-                });
-        }
+                // Parse current value (yyyy/MM/dd HH:mm) to set default inputs
+                // "2026/01/30 10:00"
+                const parts = value.split(' ');
+                if (parts.length === 2) {
+                    document.getElementById('editSlotDate').value = parts[0].replace(/\//g, '-');
+                    document.getElementById('editSlotTime').value = parts[1];
+                }
+                window.scrollTo(0, 0);
+            }
 
-        function deleteSlot(val) {
-            if (!confirm('本当に削除しますか？')) return;
-            fetch(GAS_URL, {
-                method: 'POST',
-                body: JSON.stringify({ action: 'delete_slot', datetime: val })
-            }).then(() => {
-                showMessage('削除しました', true);
-                loadData(); // Reload all data after deletion
-            });
-        }
+            function cancelSlotEdit() {
+                document.getElementById('slotEditForm').classList.add('hidden');
+                document.getElementById('editingSlotTargetValue').value = '';
+            }
 
-        // --- Menu ---
-        function renderMenu() {
-            const list = document.getElementById('menuList');
-            list.innerHTML = '';
-            currentMenu.forEach(item => {
-                const li = document.createElement('li');
-                // Format price with commas
-                const priceFormatted = Number(item.price).toLocaleString();
+            function saveSlotEdit() {
+                const currentDatetime = document.getElementById('editingSlotTargetValue').value;
+                const newDate = document.getElementById('editSlotDate').value;
+                const newTime = document.getElementById('editSlotTime').value;
 
-                // Section Header if present
-                if (item.section) {
-                    const sectionHeader = document.createElement('div');
-                    sectionHeader.style.cssText = 'background:#eee; padding:5px 10px; font-weight:bold; margin-top:10px; border-radius:4px;';
-                    sectionHeader.textContent = item.section;
-                    list.appendChild(sectionHeader);
+                if (!newDate || !newTime) {
+                    alert('日付と時間を入力してください');
+                    return;
                 }
 
-                li.innerHTML = `
+                const newDatetime = newDate + ' ' + newTime; // Needs to be constructed as valid Date string
+
+                fetch(GAS_URL, {
+                    method: 'POST',
+                    body: JSON.stringify({
+                        action: 'update_slot_datetime',
+                        currentDatetime: currentDatetime,
+                        newDatetime: newDatetime
+                    })
+                })
+                    .then(res => res.json())
+                    .then(data => {
+                        if (data.status === 'success') {
+                            showMessage('日時を変更しました');
+                            cancelSlotEdit();
+                            loadData();
+                        } else {
+                            showMessage('エラー: ' + data.message, true);
+                        }
+                    });
+            }
+
+            function addSlot() {
+                const d = document.getElementById('newSlotDate').value;
+                const t = document.getElementById('newSlotTime').value;
+                if (!d || !t) {
+                    alert('日付と時間を入力してください');
+                    return;
+                }
+
+                // Convert YYYY-MM-DD to YYYY/MM/DD for better compatibility with GAS new Date()
+                const dateTimeStr = d.replace(/-/g, '/') + ' ' + t;
+
+                fetch(GAS_URL, {
+                    method: 'POST',
+                    body: JSON.stringify({ action: 'add_slots', slots: [dateTimeStr] })
+                }).then(res => res.json())
+                    .then(data => {
+                        if (data.status === 'success') {
+                            showMessage('追加しました');
+                            loadData();
+                        } else {
+                            showMessage('エラー: ' + (data.message || 'Unknown'), true);
+                        }
+                    });
+            }
+
+            function deleteSlot(val) {
+                if (!confirm('本当に削除しますか？')) return;
+                fetch(GAS_URL, {
+                    method: 'POST',
+                    body: JSON.stringify({ action: 'delete_slot', datetime: val })
+                }).then(() => {
+                    showMessage('削除しました', true);
+                    loadData(); // Reload all data after deletion
+                });
+            }
+
+            // --- Menu ---
+            function renderMenu() {
+                const list = document.getElementById('menuList');
+                list.innerHTML = '';
+                currentMenu.forEach(item => {
+                    const li = document.createElement('li');
+                    // Format price with commas
+                    const priceFormatted = Number(item.price).toLocaleString();
+
+                    // Section Header if present
+                    if (item.section) {
+                        const sectionHeader = document.createElement('div');
+                        sectionHeader.style.cssText = 'background:#eee; padding:5px 10px; font-weight:bold; margin-top:10px; border-radius:4px;';
+                        sectionHeader.textContent = item.section;
+                        list.appendChild(sectionHeader);
+                    }
+
+                    li.innerHTML = `
                 <div class="item-info">
                     <strong>${item.name}</strong> (${priceFormatted}円 / ${item.duration}分)
                     <br><small>${item.description}</small>
@@ -453,101 +489,229 @@
                     </div>
                 </div>
             `;
-                list.appendChild(li);
-            });
-        }
-
-        function editMenu(item) {
-            document.getElementById('menuId').value = item.id;
-            document.getElementById('menuName').value = item.name;
-            document.getElementById('menuPrice').value = item.price;
-            document.getElementById('menuDuration').value = item.duration;
-            document.getElementById('menuSection').value = item.section || '';
-            document.getElementById('menuDesc').value = item.menuDesc || item.description;
-            document.getElementById('menuOrder').value = item.order; // Preserve order
-            document.getElementById('cancelEditBtn').classList.remove('hidden');
-            window.scrollTo(0, 0);
-        }
-
-        function resetMenuForm() {
-            document.getElementById('menuId').value = '';
-            document.getElementById('menuName').value = '';
-            document.getElementById('menuPrice').value = '';
-            document.getElementById('menuDuration').value = '';
-            document.getElementById('menuSection').value = '';
-            document.getElementById('menuDesc').value = '';
-            document.getElementById('menuOrder').value = '';
-            document.getElementById('cancelEditBtn').classList.add('hidden');
-        }
-
-        function saveMenu() {
-            const item = {
-                id: document.getElementById('menuId').value,
-                name: document.getElementById('menuName').value,
-                price: document.getElementById('menuPrice').value,
-                duration: document.getElementById('menuDuration').value,
-                description: document.getElementById('menuDesc').value,
-                section: document.getElementById('menuSection').value,
-                order: document.getElementById('menuOrder').value // Keep existing if editing, or will be appended
-            };
-
-            fetch(GAS_URL, {
-                method: 'POST',
-                body: JSON.stringify({ action: 'save_menu', item: item })
-            }).then(() => {
-                showMessage('保存しました');
-                resetMenuForm();
-                loadData();
-            });
-        }
-
-        function deleteMenu(id) {
-            if (!confirm('本当に削除しますか？')) return;
-            fetch(GAS_URL, {
-                method: 'POST',
-                body: JSON.stringify({ action: 'delete_menu', id: id })
-            }).then(() => {
-                showMessage('削除しました', true);
-                loadData();
-            });
-        }
-
-        function moveMenu(e, id, direction) {
-            e.stopPropagation();
-            const index = currentMenu.findIndex(item => item.id == id);
-            if (index < 0) return;
-
-            const newIndex = index + direction;
-            if (newIndex < 0 || newIndex >= currentMenu.length) return;
-
-            // Swap
-            const temp = currentMenu[index];
-            currentMenu[index] = currentMenu[newIndex];
-            currentMenu[newIndex] = temp;
-
-            // Optimistic UI Update
-            renderMenu();
-
-            // Save new order to backend
-            const ids = currentMenu.map(item => item.id);
-            // Debounce or just save? For simplicity, save immediately.
-            fetch(GAS_URL, {
-                method: 'POST',
-                body: JSON.stringify({ action: 'reorder_menu', ids: ids })
-            }).then(res => res.json())
-                .then(data => {
-                    if (data.status !== 'success') {
-                        alert('並び替えの保存に失敗しました');
-                        loadData(); // Revert
-                    }
+                    list.appendChild(li);
                 });
-        }
+            }
 
-        renderSlots();
+            function editMenu(item) {
+                document.getElementById('menuId').value = item.id;
+                document.getElementById('menuName').value = item.name;
+                document.getElementById('menuPrice').value = item.price;
+                document.getElementById('menuDuration').value = item.duration;
+                document.getElementById('menuSection').value = item.section || '';
+                document.getElementById('menuDesc').value = item.menuDesc || item.description;
+                document.getElementById('menuOrder').value = item.order; // Preserve order
+                document.getElementById('cancelEditBtn').classList.remove('hidden');
+                window.scrollTo(0, 0);
+            }
+
+            function resetMenuForm() {
+                document.getElementById('menuId').value = '';
+                document.getElementById('menuName').value = '';
+                document.getElementById('menuPrice').value = '';
+                document.getElementById('menuDuration').value = '';
+                document.getElementById('menuSection').value = '';
+                document.getElementById('menuDesc').value = '';
+                document.getElementById('menuOrder').value = '';
+                document.getElementById('cancelEditBtn').classList.add('hidden');
+            }
+
+            function saveMenu() {
+                const item = {
+                    id: document.getElementById('menuId').value,
+                    name: document.getElementById('menuName').value,
+                    price: document.getElementById('menuPrice').value,
+                    duration: document.getElementById('menuDuration').value,
+                    description: document.getElementById('menuDesc').value,
+                    section: document.getElementById('menuSection').value,
+                    order: document.getElementById('menuOrder').value // Keep existing if editing, or will be appended
+                };
+
+                fetch(GAS_URL, {
+                    method: 'POST',
+                    body: JSON.stringify({ action: 'save_menu', item: item })
+                }).then(() => {
+                    showMessage('保存しました');
+                    resetMenuForm();
+                    loadData();
+                });
+            }
+
+            function deleteMenu(id) {
+                if (!confirm('本当に削除しますか？')) return;
+                fetch(GAS_URL, {
+                    method: 'POST',
+                    body: JSON.stringify({ action: 'delete_menu', id: id })
+                }).then(() => {
+                    showMessage('削除しました', true);
+                    loadData();
+                });
+            }
+
+            function moveMenu(e, id, direction) {
+                e.stopPropagation();
+                const index = currentMenu.findIndex(item => item.id == id);
+                if (index < 0) return;
+
+                const newIndex = index + direction;
+                if (newIndex < 0 || newIndex >= currentMenu.length) return;
+
+                // Swap
+                const temp = currentMenu[index];
+                currentMenu[index] = currentMenu[newIndex];
+                currentMenu[newIndex] = temp;
+
+                // Optimistic UI Update
+                renderMenu();
+
+                // Save new order to backend
+                const ids = currentMenu.map(item => item.id);
+                // Debounce or just save? For simplicity, save immediately.
+                fetch(GAS_URL, {
+                    method: 'POST',
+                    body: JSON.stringify({ action: 'reorder_menu', ids: ids })
+                }).then(res => res.json())
+                    .then(data => {
+                        if (data.status !== 'success') {
+                            alert('並び替えの保存に失敗しました');
+                            loadData(); // Revert
+                        }
+                    });
+            }
+
+            // --- Reservations ---
+            function renderReservations() {
+                const list = document.getElementById('reservationsList');
+                list.innerHTML = '';
+
+                // Filter out past? Optional. Showing all for now.
+                // Highlight Cancelled.
+
+                currentReservations.forEach(res => {
+                    const li = document.createElement('li');
+                    const isCancelled = res.status === 'キャンセル';
+
+                    // Find menu name
+                    const menu = currentMenu.find(m => m.id === res.menuId);
+                    const menuName = menu ? menu.name : '不明なメニュー';
+
+                    if (isCancelled) {
+                        li.style.backgroundColor = '#f0f0f0';
+                        li.style.color = '#999';
+                    }
+
+                    li.innerHTML = `
+                <div class="item-info">
+                    <strong>${res.displayDate}</strong> ${isCancelled ? '<span style="color:red">[キャンセル済]</span>' : ''}
+                    <br>
+                    ${res.name} 様 (${menuName})
+                    <br>
+                    <small>電話: ${res.phone} / 備考: ${res.notes || 'なし'}</small>
+                </div>
+                <div class="item-actions">
+                    ${!isCancelled ? `
+                    <button class="btn-sm btn-secondary" onclick='openReservationEdit(${JSON.stringify(res)})'>変更</button>
+                    <button class="btn-sm btn-danger" onclick="cancelReservationAction('${res.id}')">取消</button>
+                    ` : ''}
+                </div>
+                `;
+                    list.appendChild(li);
+                });
+
+                if (currentReservations.length === 0) {
+                    list.innerHTML = '<p style="text-align:center; color:gray;">予約はありません</p>';
+                }
+            }
+
+            function openReservationEdit(res) {
+                document.getElementById('reservationEditForm').classList.remove('hidden');
+                document.getElementById('editingResId').value = res.id;
+                document.getElementById('editingResDisplay').textContent = `${res.displayDate} - ${res.name}様`;
+
+                // Setup Date/Time inputs
+                // res.date is "YYYY/MM/DD HH:mm"
+                const parts = res.date.split(' ');
+                if (parts.length === 2) {
+                    document.getElementById('editResDate').value = parts[0].replace(/\//g, '-');
+                    document.getElementById('editResTime').value = parts[1];
+                }
+
+                // Setup Menu Select
+                const select = document.getElementById('editResMenu');
+                select.innerHTML = '';
+                currentMenu.forEach(m => {
+                    const opt = document.createElement('option');
+                    opt.value = m.id;
+                    opt.textContent = m.name + ' (' + m.duration + '分)';
+                    if (m.id === res.menuId) opt.selected = true;
+                    select.appendChild(opt);
+                });
+
+                window.scrollTo(0, 0); // Scroll to top to see form
+            }
+
+            function closeReservationEdit() {
+                document.getElementById('reservationEditForm').classList.add('hidden');
+            }
+
+            function saveReservationEdit() {
+                const id = document.getElementById('editingResId').value;
+                const newDate = document.getElementById('editResDate').value; // YYYY-MM-DD
+                const newTime = document.getElementById('editResTime').value; // HH:mm
+                const newMenuId = document.getElementById('editResMenu').value;
+
+                if (!newDate || !newTime) {
+                    alert('日時を入力してください');
+                    return;
+                }
+
+                const newDatetime = newDate.replace(/-/g, '/') + ' ' + newTime;
+
+                if (!confirm('変更を保存しますか？\n（カレンダーも更新されます）')) return;
+
+                fetch(GAS_URL, {
+                    method: 'POST',
+                    body: JSON.stringify({
+                        action: 'update_reservation',
+                        reservationId: id,
+                        newDatetime: newDatetime,
+                        newMenuId: newMenuId
+                    })
+                }).then(res => res.json())
+                    .then(data => {
+                        if (data.status === 'success') {
+                            showMessage('予約を変更しました');
+                            closeReservationEdit();
+                            loadData(); // Reload
+                        } else {
+                            showMessage('エラー: ' + data.message, true);
+                        }
+                    });
+            }
+
+            function cancelReservationAction(id) {
+                if (!confirm('本当にこの予約を取り消しますか？\n（カレンダーからも削除されます）')) return;
+
+                fetch(GAS_URL, {
+                    method: 'POST',
+                    body: JSON.stringify({ action: 'cancel_reservation', reservationId: id })
+                }).then(res => res.json())
+                    .then(data => {
+                        if (data.status === 'success') {
+                            showMessage('予約を取り消しました', true); // Show as 'success' style visually but maybe red message
+                            loadData();
+                        } else {
+                            showMessage('エラー: ' + data.message, true);
+                        }
+                    });
+            }
 
 
-        // Init
-        checkAuth();
+            renderSlots();
+
+
+            // Init
+            checkAuth();
 
     </script>
 </body>
