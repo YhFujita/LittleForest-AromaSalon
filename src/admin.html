@@ -5,734 +5,1040 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>予約システム管理</title>
+    <!-- Bootstrap 5 CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- FullCalendar -->
+    <script src='https://cdn.jsdelivr.net/npm/fullcalendar@6.1.10/index.global.min.js'></script>
+
     <style>
         body {
-            font-family: sans-serif;
-            padding: 20px;
-            max-width: 800px;
-            margin: 0 auto;
-            background-color: #f4f4f4;
+            background-color: #f8f9fa;
+            font-family: "Helvetica Neue", Arial, sans-serif;
         }
 
-        .container {
-            background: white;
-            padding: 20px;
-            border-radius: 8px;
-            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
-        }
-
-        h1,
-        h2 {
-            color: #333;
-        }
-
-        .hidden {
-            display: none;
-        }
-
-        .form-group {
-            margin-bottom: 15px;
-        }
-
-        label {
-            display: block;
-            margin-bottom: 5px;
-            font-weight: bold;
-        }
-
-        input,
-        select,
-        textarea {
-            width: 100%;
-            padding: 10px;
-            margin-bottom: 10px;
-            border: 1px solid #ddd;
-            border-radius: 4px;
-            box-sizing: border-box;
-        }
-
-        button {
-            padding: 10px 20px;
-            border: none;
-            border-radius: 4px;
-            cursor: pointer;
-            font-weight: bold;
-        }
-
-        .btn-primary {
-            background-color: #06c755;
-            color: white;
-            width: 100%;
-        }
-
-        .btn-danger {
-            background-color: #dc3545;
-            color: white;
-        }
-
-        .btn-secondary {
-            background-color: #6c757d;
-            color: white;
-        }
-
-        .btn-sm {
-            padding: 5px 10px;
-            font-size: 0.9em;
-            width: auto;
-        }
-
-        /* Tabs */
-        .tabs {
-            display: flex;
-            border-bottom: 2px solid #ddd;
-            margin-bottom: 20px;
-        }
-
-        .tab {
-            padding: 10px 20px;
-            cursor: pointer;
-            border-bottom: 2px solid transparent;
-            margin-bottom: -2px;
-        }
-
-        .tab.active {
-            border-bottom: 2px solid #06c755;
-            color: #06c755;
-            font-weight: bold;
-        }
-
-        /* Lists */
-        .item-list {
-            list-style: none;
-            padding: 0;
-        }
-
-        .item-list li {
+        /* Calendar Styles */
+        #calendar-container {
             background: #fff;
-            border: 1px solid #ddd;
             padding: 15px;
-            margin-bottom: 10px;
-            border-radius: 4px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+        }
+
+        .fc-event {
+            cursor: pointer;
+            border: none !important;
+        }
+
+        .fc-daygrid-day-number {
+            font-size: 1.1em;
+            color: #333;
+            text-decoration: none;
+        }
+
+        /* Slot Status Indicators */
+        /* We will use events to show status, so specific CSS might be minimal */
+
+        /* Modal Styles */
+        .modal-slot-list {
+            max-height: 50vh;
+            overflow-y: auto;
+        }
+
+        .slot-item {
             display: flex;
             justify-content: space-between;
             align-items: center;
-        }
-
-        .item-list li.reserved {
-            background-color: #fff3cd;
-            border-color: #ffeeba;
-        }
-
-        .item-info {
-            flex-grow: 1;
-        }
-
-        .item-actions {
-            display: flex;
-            gap: 10px;
-        }
-
-        #message {
-            margin-top: 10px;
             padding: 10px;
-            border-radius: 4px;
-            text-align: center;
+            border-bottom: 1px solid #eee;
+        }
+
+        .slot-item:last-child {
+            border-bottom: none;
+        }
+
+        .slot-time {
+            font-size: 1.1rem;
+            font-weight: bold;
+        }
+
+        /* Toggle Switch Override */
+        .form-switch .form-check-input {
+            width: 3em;
+            height: 1.5em;
+            cursor: pointer;
+        }
+
+        /* Loading Overlay */
+        #loading-overlay {
             display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(255, 255, 255, 0.7);
+            z-index: 9999;
+            justify-content: center;
+            align-items: center;
         }
 
-        .success {
-            background-color: #d4edda;
-            color: #155724;
-        }
+        /* Responsive Fixes */
+        @media (max-width: 576px) {
+            .fc-header-toolbar {
+                flex-direction: column;
+                gap: 10px;
+            }
 
-        .error {
-            background-color: #f8d7da;
-            color: #721c24;
+            .fc-toolbar-chunk {
+                display: flex;
+                justify-content: center;
+            }
         }
     </style>
 </head>
 
 <body>
 
-    <div id="loginSection" class="container">
-        <h2>管理者ログイン</h2>
-        <div class="form-group">
-            <label>ID</label>
-            <input type="text" id="adminId">
-        </div>
-        <div class="form-group">
-            <label>パスワード</label>
-            <input type="password" id="adminPass">
-        </div>
-        <button class="btn-primary" onclick="login()">ログイン</button>
-        <div id="loginError" style="color: red; margin-top: 10px;"></div>
-    </div>
-
-    <div id="adminPanel" class="container hidden">
-        <div style="display: flex; justify-content: space-between; align-items: center;">
-            <h1>管理画面</h1>
-            <button class="btn-secondary btn-sm" onclick="logout()">ログアウト</button>
-        </div>
-
-        <div class="tabs">
-            <div class="tab active" onclick="switchTab('slots')">予約枠</div>
-            <div class="tab" onclick="switchTab('menu')">メニュー</div>
-            <div class="tab" onclick="switchTab('reservations')">予約管理</div>
-        </div>
-
-        <!-- Slots Management -->
-        <div id="slotsTab">
-            <div class="form-group" style="background: #f9f9f9; padding: 15px; border-radius: 4px;">
-                <h3>新規枠追加</h3>
-                <input type="date" id="newSlotDate">
-                <input type="time" id="newSlotTime" value="10:00" step="1800">
-                <button class="btn-primary" onclick="addSlot()">追加</button>
-            </div>
-
-            <!-- Slot Edit Form (Hidden by default) -->
-            <div id="slotEditForm" class="form-group hidden"
-                style="background: #e9ecef; padding: 15px; border-radius: 4px; margin-top: 10px; border: 1px solid #ced4da;">
-                <h3>枠の日時変更</h3>
-                <p id="editingSlotTargetDisplay" style="font-weight:bold;"></p>
-                <input type="hidden" id="editingSlotTargetValue">
-                <label>新しい日時</label>
-                <input type="date" id="editSlotDate">
-                <input type="time" id="editSlotTime" step="1800">
-                <div style="display: flex; gap: 10px; margin-top: 10px;">
-                    <button class="btn-primary" onclick="saveSlotEdit()">変更保存</button>
-                    <button class="btn-secondary" onclick="cancelSlotEdit()">キャンセル</button>
-                </div>
-            </div>
-
-            <div id="slotsList" class="item-list">Loading...</div>
-        </div>
-
-        <!-- Menu Management -->
-        <div id="menuTab" class="hidden">
-            <div class="form-group" style="background: #f9f9f9; padding: 15px; border-radius: 4px;">
-                <h3>メニュー追加/編集</h3>
-                <input type="hidden" id="menuId">
-                <input type="text" id="menuName" placeholder="メニュー名">
-                <input type="number" id="menuPrice" placeholder="価格（円）">
-                <input type="number" id="menuDuration" placeholder="所要時間（分）">
-                <input type="text" id="menuSection" placeholder="セクションタイトル（項目の上に表示：例「コース」）">
-                <textarea id="menuDesc" placeholder="説明" rows="2"></textarea>
-                <input type="hidden" id="menuOrder"> <!-- Hidden, managed by list order -->
-                <button class="btn-primary" onclick="saveMenu()">保存</button>
-                <button class="btn-secondary hidden" id="cancelEditBtn" onclick="resetMenuForm()">キャンセル</button>
-            </div>
-            <div id="menuList" class="item-list">Loading...</div>
-        </div>
-
-        <!-- Reservations Management -->
-        <div id="reservationsTab" class="hidden">
-            <!-- Reservation Edit Form (Hidden by default) -->
-            <div id="reservationEditForm" class="form-group hidden"
-                style="background: #e9ecef; padding: 15px; border-radius: 4px; margin-bottom: 20px; border: 1px solid #ced4da;">
-                <h3>予約変更</h3>
-                <p id="editingResDisplay" style="font-weight:bold;"></p>
-                <input type="hidden" id="editingResId">
-
-                <label>新しい日時</label>
-                <input type="date" id="editResDate">
-                <input type="time" id="editResTime" step="1800">
-
-                <label>メニュー変更</label>
-                <select id="editResMenu">
-                    <!-- Populated by JS -->
-                </select>
-
-                <div style="display: flex; gap: 10px; margin-top: 10px;">
-                    <button class="btn-primary" onclick="saveReservationEdit()">変更保存</button>
-                    <button class="btn-secondary" onclick="closeReservationEdit()">キャンセル</button>
-                </div>
-            </div>
-
-            <div id="reservationsList" class="item-list">Loading...</div>
+    <!-- Loading Spinner -->
+    <div id="loading-overlay">
+        <div class="spinner-border text-primary" style="width: 3rem; height: 3rem;" role="status">
+            <span class="visually-hidden">Loading...</span>
         </div>
     </div>
 
-    <div id="message"></div>
+    <!-- Toast Notification -->
+    <div class="toast-container position-fixed bottom-0 end-0 p-3" style="z-index: 1055;">
+        <div id="liveToast" class="toast align-items-center text-white bg-success border-0" role="alert"
+            aria-live="assertive" aria-atomic="true">
+            <div class="d-flex">
+                <div class="toast-body" id="toast-message">
+                    処理が完了しました
+                </div>
+                <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"
+                    aria-label="Close"></button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Navbar -->
+    <nav class="navbar navbar-dark bg-dark mb-4">
+        <div class="container-fluid">
+            <span class="navbar-brand mb-0 h1">予約管理システム</span>
+            <div id="nav-actions" class="d-none">
+                <button class="btn btn-outline-light btn-sm me-2" onclick="app.refreshData()">データ更新</button>
+                <button class="btn btn-outline-light btn-sm" onclick="app.logout()">ログアウト</button>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container main-container">
+        <!-- Login Section -->
+        <div id="login-section" class="card shadow p-4 mx-auto" style="max-width: 400px;">
+            <h3 class="text-center mb-4">管理者ログイン</h3>
+            <div class="mb-3">
+                <label class="form-label">ID</label>
+                <input type="text" id="admin-id" class="form-control">
+            </div>
+            <div class="mb-3">
+                <label class="form-label">Password</label>
+                <input type="password" id="admin-pass" class="form-control">
+            </div>
+            <button class="btn btn-primary w-100 py-2" onclick="app.login()">ログイン</button>
+            <div id="login-error" class="text-danger mt-3 text-center"></div>
+        </div>
+
+        <!-- Dashboard Section -->
+        <div id="dashboard-section" class="d-none">
+            <ul class="nav nav-tabs mb-3" id="adminTabs" role="tablist">
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link active" id="list-tab" data-bs-toggle="tab" data-bs-target="#list-content"
+                        type="button" role="tab">予約一覧</button>
+                </li>
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link" id="slots-tab" data-bs-toggle="tab" data-bs-target="#slots-content"
+                        type="button" role="tab" onclick="app.renderSlotCalendar()">予約枠設定</button>
+                </li>
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link" id="menu-tab" data-bs-toggle="tab" data-bs-target="#menu-content"
+                        type="button" role="tab" onclick="app.renderMenuSettings()">メニュー設定</button>
+                </li>
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link" id="settings-tab" data-bs-toggle="tab" data-bs-target="#settings-content"
+                        type="button" role="tab" onclick="app.renderBasicSettings()">基本設定</button>
+                </li>
+            </ul>
+
+            <div class="tab-content">
+                <!-- Reservation List -->
+                <div class="tab-pane fade show active" id="list-content" role="tabpanel">
+                    <div class="card p-3 shadow-sm">
+                        <div class="d-flex justify-content-between align-items-center mb-3">
+                            <h5 class="card-title mb-0">予約一覧</h5>
+                        </div>
+                        <div class="table-responsive">
+                            <table class="table table-hover align-middle">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th>日時</th>
+                                        <th>名前</th>
+                                        <th>メニュー</th>
+                                        <th>金額</th>
+                                        <th>電話</th>
+                                        <th>ステータス</th>
+                                        <th>操作</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="reservation-list-body"></tbody>
+                            </table>
+                        </div>
+                        <div id="no-reservations-msg" class="text-center text-muted p-3 d-none">予約はありません</div>
+                    </div>
+                </div>
+
+                <!-- Slots (Calendar) -->
+                <div class="tab-pane fade" id="slots-content" role="tabpanel">
+                    <div class="card p-2 shadow-sm">
+                        <div id="calendar-container">
+                            <div id="slotCalendar"></div>
+                        </div>
+                        <div class="mt-2 text-end text-muted small">
+                            日付をタップまたはクリックして時間枠を編集できます
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Menu Settings -->
+                <div class="tab-pane fade" id="menu-content" role="tabpanel">
+                    <div class="card p-3 shadow-sm">
+                        <div class="d-flex justify-content-between align-items-center mb-3">
+                            <h5 class="card-title mb-0">メニュー一覧</h5>
+                            <button class="btn btn-success" onclick="app.showMenuModal()">＋ 新規追加</button>
+                        </div>
+                        <div id="menu-list" class="list-group list-group-flush">
+                            <!-- Items will be injected -->
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Basic Settings -->
+                <div class="tab-pane fade" id="settings-content" role="tabpanel">
+                    <div class="card p-3 shadow-sm">
+                        <h5 class="card-title mb-3">営業日時・基本設定</h5>
+                        <p class="text-muted small">標準の営業時間と休憩時間を設定します。これらは予約枠カレンダーで編集する際のデフォルト値として使用されます。</p>
+
+                        <form id="basic-settings-form">
+                            <div class="mb-4 row align-items-center">
+                                <label class="col-sm-3 col-form-label fw-bold">スロット間隔 (分)</label>
+                                <div class="col-sm-3">
+                                    <select class="form-select" id="setting-interval">
+                                        <option value="30">30分</option>
+                                        <option value="60">60分</option>
+                                        <option value="90">90分</option>
+                                        <option value="120">120分</option>
+                                    </select>
+                                </div>
+                            </div>
+
+                            <div class="table-responsive">
+                                <table class="table table-bordered align-middle text-center">
+                                    <thead class="table-light">
+                                        <tr>
+                                            <th>曜日</th>
+                                            <th style="width:100px;">状態</th>
+                                            <th>開店</th>
+                                            <th>閉店</th>
+                                            <th>休憩開始</th>
+                                            <th>休憩終了</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="basic-settings-tbody">
+                                        <!-- JS generated -->
+                                    </tbody>
+                                </table>
+                            </div>
+                            <div class="text-end mt-3">
+                                <button type="button" class="btn btn-primary px-4"
+                                    onclick="app.saveBasicSettings()">保存</button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modals -->
+
+    <!-- Slot Edit Modal -->
+    <div class="modal fade" id="slotEditModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered modal-lg"> <!-- Large modal for better mobile view -->
+            <div class="modal-content">
+                <div class="modal-header bg-light">
+                    <h5 class="modal-title" id="slotEditModalLabel">予約枠設定</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <h4 id="slotEditDateDisplay" class="text-center mb-4 fw-bold text-primary"></h4>
+                    <p class="text-center text-muted small mb-3">スイッチをONにした時間が予約可能になります。</p>
+                    <div id="slotEditList" class="modal-slot-list px-2">
+                        <!-- Slots injected here -->
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">キャンセル</button>
+                    <button type="button" class="btn btn-primary px-4" onclick="app.saveDaySlots()">変更を保存</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Menu Edit Modal -->
+    <div class="modal fade" id="menuEditModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="menuEditModalTitle">メニュー編集</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <input type="hidden" id="menuId">
+                    <input type="hidden" id="menuOrder">
+                    <div class="mb-3">
+                        <label class="form-label">メニュー名 <span class="text-danger">*</span></label>
+                        <input type="text" class="form-control" id="menuName">
+                    </div>
+                    <div class="row">
+                        <div class="col-6 mb-3">
+                            <label class="form-label">価格 (円) <span class="text-danger">*</span></label>
+                            <input type="number" class="form-control" id="menuPrice">
+                        </div>
+                        <div class="col-6 mb-3">
+                            <label class="form-label">時間 (分) <span class="text-danger">*</span></label>
+                            <input type="number" class="form-control" id="menuDuration">
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">カテゴリ (セクション)</label>
+                        <input type="text" class="form-control" id="menuSection" placeholder="例: オプション">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">説明</label>
+                        <textarea class="form-control" id="menuDesc" rows="3"></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">キャンセル</button>
+                    <button type="button" class="btn btn-primary" onclick="app.saveMenu()">保存</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Reservation Edit Modal -->
+    <div class="modal fade" id="resEditModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">予約変更</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <input type="hidden" id="resId">
+                    <p id="resDisplayTitle" class="fw-bold mb-3"></p>
+
+                    <div class="mb-3">
+                        <label class="form-label">日時 <span class="text-danger">*</span></label>
+                        <div class="input-group">
+                            <input type="date" class="form-control" id="resDate">
+                            <input type="time" class="form-control" id="resTime">
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">メニュー <span class="text-danger">*</span></label>
+                        <select class="form-select" id="resMenu"></select>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">キャンセル</button>
+                    <button type="button" class="btn btn-primary" id="resSaveBtn"
+                        onclick="app.saveReservation()">変更保存</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+
+    <!-- Bootstrap 5 JS -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 
     <script>
-        const GAS_URL = 'https://script.google.com/macros/s/AKfycbwZw61TyYkb8fboc8mWRZGZUpzqRWUluykk2cQ4hKXQV83RySPsprsKVL9R8Luy4AbZtw/exec'; // Replace with your Web App URL if changed
+        const GAS_URL = 'https://script.google.com/macros/s/AKfycbwZw61TyYkb8fboc8mWRZGZUpzqRWUluykk2cQ4hKXQV83RySPsprsKVL9R8Luy4AbZtw/exec';
 
-        function showMessage(msg, isError = false) {
-            const el = document.getElementById('message');
-            el.textContent = msg;
-            el.className = isError ? 'error' : 'success';
-            el.style.display = 'block';
-            setTimeout(() => el.style.display = 'none', 3000);
-        }
+        const app = {
+            token: null,
+            menu: [],
+            slots: [],
+            reservations: [],
+            basicSettings: { weekly: [], interval: 60 },
+            calendar: null,
+            currentEditDate: null, // YYYY-MM-DD
 
-        // --- Auth ---
-        function login() {
-            const id = document.getElementById('adminId').value;
-            const pass = document.getElementById('adminPass').value;
+            // --- Auth ---
+            checkAuth: function () {
+                // Auto-login logic if session persisted? Not implemented yet.
+                // Just default to login screen.
+            },
 
-            fetch(GAS_URL, {
-                method: 'POST',
-                body: JSON.stringify({ action: 'login', id: id, password: pass })
-            })
-                .then(res => res.json())
-                .then(data => {
-                    if (data.status === 'success') {
-                        localStorage.setItem('admin_token', 'valid'); // Simple session
-                        showPanel();
-                        loadData();
-                    } else {
-                        document.getElementById('loginError').textContent = 'ログインに失敗しました';
-                    }
+            login: function () {
+                const id = document.getElementById('admin-id').value;
+                const pass = document.getElementById('admin-pass').value;
+                if (!id || !pass) return alert('IDとパスワードを入力してください');
+
+                this.showLoading(true);
+                fetch(GAS_URL, {
+                    method: 'POST',
+                    body: JSON.stringify({ action: 'login', id: id, password: pass })
                 })
-                .catch(err => alert('Error: ' + err));
-        }
+                    .then(r => r.json())
+                    .then(data => {
+                        this.showLoading(false);
+                        if (data.status === 'success') {
+                            this.token = data.token;
+                            document.getElementById('login-section').classList.add('d-none');
+                            document.getElementById('dashboard-section').classList.remove('d-none');
+                            document.getElementById('nav-actions').classList.remove('d-none');
+                            this.fetchAdminData();
+                        } else {
+                            document.getElementById('login-error').textContent = 'ログイン失敗: ' + data.message;
+                        }
+                    })
+                    .catch(e => {
+                        this.showLoading(false);
+                        alert('Error: ' + e);
+                    });
+            },
 
-        function logout() {
-            localStorage.removeItem('admin_token');
-            location.reload();
-        }
+            logout: function () {
+                location.reload();
+            },
 
-        function checkAuth() {
-            if (localStorage.getItem('admin_token')) {
-                document.getElementById('adminId').value = ''; // Clear fields
-                document.getElementById('adminPass').value = '';
-                showPanel();
-                loadData();
-            }
-        }
+            // --- Data Fetch ---
+            fetchAdminData: function () {
+                this.showLoading(true);
+                fetch(GAS_URL + '?action=get_admin_data')
+                    .then(r => r.json())
+                    .then(data => {
+                        this.showLoading(false);
+                        console.log("Fetched Data:", data);
+                        if (data.status === 'success') {
+                            this.menu = data.menu;
+                            this.slots = data.slots;
+                            this.reservations = data.reservations;
+                            this.basicSettings = data.basicSettings || { weekly: [], interval: 60 };
 
-        function showPanel() {
-            document.getElementById('loginSection').classList.add('hidden');
-            document.getElementById('adminPanel').classList.remove('hidden');
-        }
+                            this.renderReservationList();
+                            this.renderMenuSettings();
+                            this.renderBasicSettings();
 
-        // --- Data Loading ---
-        let currentSlots = [];
-        let currentMenu = [];
-        let currentReservations = [];
+                            // If calendar is active, re-render
+                            if (this.calendar) {
+                                this.calendar.refetchEvents();
+                            }
+                        } else {
+                            alert('Data Load Error: ' + data.message);
+                        }
+                    })
+                    .catch(e => {
+                        this.showLoading(false);
+                        alert('Fetch Error: ' + e);
+                    });
+            },
 
-        function loadData() {
-            // Fetch all data including admin specific view if possible
-            fetch(GAS_URL, { method: 'POST', body: JSON.stringify({ action: 'get_admin_data' }) })
-                .then(res => res.json())
-                .then(data => {
-                    if (data.status === 'success') {
-                        currentMenu = data.menu;
-                        currentSlots = data.slots;
-                        currentReservations = data.reservations || [];
-                        renderSlots();
-                        renderMenu();
-                        renderReservations();
-                    }
-                });
-        }
+            refreshData: function () {
+                this.fetchAdminData();
+            },
 
-        // --- Tabs ---
-        function switchTab(tabName) {
-            document.querySelectorAll('.tab').forEach(el => el.classList.remove('active'));
-            document.querySelector(`.tab[onclick="switchTab('${tabName}')"]`).classList.add('active');
+            // --- Calendar UI ---
+            renderSlotCalendar: function () {
+                const calendarEl = document.getElementById('slotCalendar');
 
-            if (tabName === 'slots') {
-                document.getElementById('slotsTab').classList.remove('hidden');
-                document.getElementById('menuTab').classList.add('hidden');
-                document.getElementById('reservationsTab').classList.add('hidden');
-            } else if (tabName === 'menu') {
-                document.getElementById('slotsTab').classList.add('hidden');
-                document.getElementById('menuTab').classList.remove('hidden');
-                document.getElementById('reservationsTab').classList.add('hidden');
-            } else if (tabName === 'reservations') {
-                document.getElementById('slotsTab').classList.add('hidden');
-                document.getElementById('menuTab').classList.add('hidden');
-                document.getElementById('reservationsTab').classList.remove('hidden');
-            }
-        }
-
-        // --- Slots ---
-        function renderSlots() {
-            const list = document.getElementById('slotsList');
-            list.innerHTML = '';
-            currentSlots.forEach(slot => {
-                const li = document.createElement('li');
-                li.innerHTML = `
-            <div class="item-info">
-                <strong>${slot.display}</strong>
-                <br>
-                <span style="font-size:0.8em; color: gray;">${slot.value}</span>
-            </div>
-            <div class="item-actions">
-                <button class="btn-sm btn-secondary" onclick="openSlotEdit('${slot.value}', '${slot.display}')">編集</button>
-                <button class="btn-sm btn-danger" onclick="deleteSlot('${slot.value}')">削除</button>
-            </div>
-            `;
-                list.appendChild(li);
-            });
-        }
-
-        function openSlotEdit(value, display) {
-            document.getElementById('slotEditForm').classList.remove('hidden');
-            document.getElementById('editingSlotTargetDisplay').textContent = "変更対象: " + display;
-            document.getElementById('editingSlotTargetValue').value = value;
-
-            // Parse current value (yyyy/MM/dd HH:mm) to set default inputs
-            // "2026/01/30 10:00"
-            const parts = value.split(' ');
-            if (parts.length === 2) {
-                document.getElementById('editSlotDate').value = parts[0].replace(/\//g, '-');
-                document.getElementById('editSlotTime').value = parts[1];
-            }
-            window.scrollTo(0, 0);
-        }
-
-        function cancelSlotEdit() {
-            document.getElementById('slotEditForm').classList.add('hidden');
-            document.getElementById('editingSlotTargetValue').value = '';
-        }
-
-        function saveSlotEdit() {
-            const currentDatetime = document.getElementById('editingSlotTargetValue').value;
-            const newDate = document.getElementById('editSlotDate').value;
-            const newTime = document.getElementById('editSlotTime').value;
-
-            if (!newDate || !newTime) {
-                alert('日付と時間を入力してください');
-                return;
-            }
-
-            const newDatetime = newDate + ' ' + newTime; // Needs to be constructed as valid Date string
-
-            fetch(GAS_URL, {
-                method: 'POST',
-                body: JSON.stringify({
-                    action: 'update_slot_datetime',
-                    currentDatetime: currentDatetime,
-                    newDatetime: newDatetime
-                })
-            })
-                .then(res => res.json())
-                .then(data => {
-                    if (data.status === 'success') {
-                        showMessage('日時を変更しました');
-                        cancelSlotEdit();
-                        loadData();
-                    } else {
-                        showMessage('エラー: ' + data.message, true);
-                    }
-                });
-        }
-
-        function addSlot() {
-            const d = document.getElementById('newSlotDate').value;
-            const t = document.getElementById('newSlotTime').value;
-            if (!d || !t) {
-                alert('日付と時間を入力してください');
-                return;
-            }
-
-            // Convert YYYY-MM-DD to YYYY/MM/DD for better compatibility with GAS new Date()
-            const dateTimeStr = d.replace(/-/g, '/') + ' ' + t;
-
-            fetch(GAS_URL, {
-                method: 'POST',
-                body: JSON.stringify({ action: 'add_slots', slots: [dateTimeStr] })
-            }).then(res => res.json())
-                .then(data => {
-                    if (data.status === 'success') {
-                        showMessage('追加しました');
-                        loadData();
-                    } else {
-                        showMessage('エラー: ' + (data.message || 'Unknown'), true);
-                    }
-                });
-        }
-
-        function deleteSlot(val) {
-            if (!confirm('本当に削除しますか？')) return;
-            fetch(GAS_URL, {
-                method: 'POST',
-                body: JSON.stringify({ action: 'delete_slot', datetime: val })
-            }).then(() => {
-                showMessage('削除しました', true);
-                loadData(); // Reload all data after deletion
-            });
-        }
-
-        // --- Menu ---
-        function renderMenu() {
-            const list = document.getElementById('menuList');
-            list.innerHTML = '';
-            currentMenu.forEach(item => {
-                const li = document.createElement('li');
-                // Format price with commas
-                const priceFormatted = Number(item.price).toLocaleString();
-
-                // Section Header if present
-                if (item.section) {
-                    const sectionHeader = document.createElement('div');
-                    sectionHeader.style.cssText = 'background:#eee; padding:5px 10px; font-weight:bold; margin-top:10px; border-radius:4px;';
-                    sectionHeader.textContent = item.section;
-                    list.appendChild(sectionHeader);
+                // If initializing for first time or tab switch
+                if (this.calendar) {
+                    this.calendar.render();
+                    return;
                 }
 
-                li.innerHTML = `
-                <div class="item-info">
-                    <strong>${item.name}</strong> (${priceFormatted}円 / ${item.duration}分)
-                    <br><small>${item.description}</small>
-                    ${item.section ? '<br><span style="font-size:0.8em; color:blue;">[セクション始点: ' + item.section + ']</span>' : ''}
-                </div>
-                <div class="item-actions" style="flex-direction: column; gap: 5px;">
-                    <div style="display:flex; gap:5px;">
-                         <button class="btn-sm btn-secondary" onclick="moveMenu(event, '${item.id}', -1)">↑</button>
-                         <button class="btn-sm btn-secondary" onclick="moveMenu(event, '${item.id}', 1)">↓</button>
-                    </div>
-                    <div style="display:flex; gap:5px;">
-                        <button class="btn-sm btn-secondary" onclick='editMenu(${JSON.stringify(item)})'>編集</button>
-                        <button class="btn-sm btn-danger" onclick="deleteMenu('${item.id}')">削除</button>
-                    </div>
-                </div>
-            `;
-                list.appendChild(li);
-            });
-        }
-
-        function editMenu(item) {
-            document.getElementById('menuId').value = item.id;
-            document.getElementById('menuName').value = item.name;
-            document.getElementById('menuPrice').value = item.price;
-            document.getElementById('menuDuration').value = item.duration;
-            document.getElementById('menuSection').value = item.section || '';
-            document.getElementById('menuDesc').value = item.menuDesc || item.description;
-            document.getElementById('menuOrder').value = item.order; // Preserve order
-            document.getElementById('cancelEditBtn').classList.remove('hidden');
-            window.scrollTo(0, 0);
-        }
-
-        function resetMenuForm() {
-            document.getElementById('menuId').value = '';
-            document.getElementById('menuName').value = '';
-            document.getElementById('menuPrice').value = '';
-            document.getElementById('menuDuration').value = '';
-            document.getElementById('menuSection').value = '';
-            document.getElementById('menuDesc').value = '';
-            document.getElementById('menuOrder').value = '';
-            document.getElementById('cancelEditBtn').classList.add('hidden');
-        }
-
-        function saveMenu() {
-            const item = {
-                id: document.getElementById('menuId').value,
-                name: document.getElementById('menuName').value,
-                price: document.getElementById('menuPrice').value,
-                duration: document.getElementById('menuDuration').value,
-                description: document.getElementById('menuDesc').value,
-                section: document.getElementById('menuSection').value,
-                order: document.getElementById('menuOrder').value // Keep existing if editing, or will be appended
-            };
-
-            fetch(GAS_URL, {
-                method: 'POST',
-                body: JSON.stringify({ action: 'save_menu', item: item })
-            }).then(() => {
-                showMessage('保存しました');
-                resetMenuForm();
-                loadData();
-            });
-        }
-
-        function deleteMenu(id) {
-            if (!confirm('本当に削除しますか？')) return;
-            fetch(GAS_URL, {
-                method: 'POST',
-                body: JSON.stringify({ action: 'delete_menu', id: id })
-            }).then(() => {
-                showMessage('削除しました', true);
-                loadData();
-            });
-        }
-
-        function moveMenu(e, id, direction) {
-            e.stopPropagation();
-            const index = currentMenu.findIndex(item => item.id == id);
-            if (index < 0) return;
-
-            const newIndex = index + direction;
-            if (newIndex < 0 || newIndex >= currentMenu.length) return;
-
-            // Swap
-            const temp = currentMenu[index];
-            currentMenu[index] = currentMenu[newIndex];
-            currentMenu[newIndex] = temp;
-
-            // Optimistic UI Update
-            renderMenu();
-
-            // Save new order to backend
-            const ids = currentMenu.map(item => item.id);
-            // Debounce or just save? For simplicity, save immediately.
-            fetch(GAS_URL, {
-                method: 'POST',
-                body: JSON.stringify({ action: 'reorder_menu', ids: ids })
-            }).then(res => res.json())
-                .then(data => {
-                    if (data.status !== 'success') {
-                        alert('並び替えの保存に失敗しました');
-                        loadData(); // Revert
-                    }
+                this.calendar = new FullCalendar.Calendar(calendarEl, {
+                    initialView: 'dayGridMonth',
+                    locale: 'ja',
+                    headerToolbar: {
+                        left: 'prev,next today',
+                        center: 'title',
+                        right: '' // Simply month view
+                    },
+                    height: 'auto',
+                    contentHeight: 'auto',
+                    fixedWeekCount: false,
+                    showNonCurrentDates: false,
+                    events: (fetchInfo, successCallback, failureCallback) => {
+                        const events = this.getCalendarEvents();
+                        successCallback(events);
+                    },
+                    dateClick: (info) => {
+                        this.openDaySlotModal(info.dateStr);
+                    },
+                    eventClick: (info) => {
+                        // Click on circle or status
+                        const dateStr = info.event.startStr.split('T')[0];
+                        this.openDaySlotModal(dateStr);
+                    },
                 });
-        }
 
-        // --- Reservations ---
-        function renderReservations() {
-            const list = document.getElementById('reservationsList');
-            list.innerHTML = '';
+                setTimeout(() => {
+                    this.calendar.render();
+                }, 200);
+            },
 
-            // Filter out past? Optional. Showing all for now.
-            // Highlight Cancelled.
+            getCalendarEvents: function () {
+                const dailySlots = {};
+                const dailyReservationCounts = {};
 
-            currentReservations.forEach(res => {
-                const li = document.createElement('li');
-                const isCancelled = res.status === 'キャンセル';
-
-                // Find menu name
-                const menu = currentMenu.find(m => m.id === res.menuId);
-                const menuName = menu ? menu.name : '不明なメニュー';
-
-                if (isCancelled) {
-                    li.style.backgroundColor = '#f0f0f0';
-                    li.style.color = '#999';
+                // Aggregate Slots
+                if (this.slots) {
+                    this.slots.forEach(slot => {
+                        // "YYYY/MM/DD HH:mm"
+                        const dateStr = slot.value.split(' ')[0].replace(/\//g, '-');
+                        if (!dailySlots[dateStr]) dailySlots[dateStr] = 0;
+                        dailySlots[dateStr]++;
+                    });
                 }
 
-                li.innerHTML = `
-                <div class="item-info">
-                    <strong>${res.displayDate}</strong> ${isCancelled ? '<span style="color:red">[キャンセル済]</span>' : ''}
-                    <br>
-                    ${res.name} 様 (${menuName})
-                    <br>
-                    <small>電話: ${res.phone} / 備考: ${res.notes || 'なし'}</small>
-                </div>
-                <div class="item-actions">
-                    ${!isCancelled ? `
-                    <button class="btn-sm btn-secondary" onclick='openReservationEdit(${JSON.stringify(res)})'>変更</button>
-                    <button class="btn-sm btn-danger" onclick="cancelReservationAction('${res.id}')">取消</button>
-                    ` : ''}
-                </div>
-                `;
-                list.appendChild(li);
-            });
+                // Aggregate Reservations
+                if (this.reservations) {
+                    this.reservations.forEach(res => {
+                        if (res.status === 'キャンセル') return;
+                        const dateStr = new Date(res.date).toISOString().split('T')[0]; // assuming date object parseable
+                        if (!dailyReservationCounts[dateStr]) dailyReservationCounts[dateStr] = 0;
+                        dailyReservationCounts[dateStr]++;
+                    });
+                }
 
-            if (currentReservations.length === 0) {
-                list.innerHTML = '<p style="text-align:center; color:gray;">予約はありません</p>';
-            }
-        }
+                const events = [];
+                const dates = new Set([...Object.keys(dailySlots), ...Object.keys(dailyReservationCounts)]);
 
-        function openReservationEdit(res) {
-            document.getElementById('reservationEditForm').classList.remove('hidden');
-            document.getElementById('editingResId').value = res.id;
-            document.getElementById('editingResDisplay').textContent = `${res.displayDate} - ${res.name}様`;
+                dates.forEach(date => {
+                    const count = dailySlots[date] || 0;
+                    const resCount = dailyReservationCounts[date] || 0;
 
-            // Setup Date/Time inputs
-            // res.date is "YYYY/MM/DD HH:mm"
-            const parts = res.date.split(' ');
-            if (parts.length === 2) {
-                document.getElementById('editResDate').value = parts[0].replace(/\//g, '-');
-                document.getElementById('editResTime').value = parts[1];
-            }
-
-            // Setup Menu Select
-            const select = document.getElementById('editResMenu');
-            select.innerHTML = '';
-            currentMenu.forEach(m => {
-                const opt = document.createElement('option');
-                opt.value = m.id;
-                opt.textContent = m.name + ' (' + m.duration + '分)';
-                if (m.id === res.menuId) opt.selected = true;
-                select.appendChild(opt);
-            });
-
-            window.scrollTo(0, 0); // Scroll to top to see form
-        }
-
-        function closeReservationEdit() {
-            document.getElementById('reservationEditForm').classList.add('hidden');
-        }
-
-        function saveReservationEdit() {
-            const id = document.getElementById('editingResId').value;
-            const newDate = document.getElementById('editResDate').value; // YYYY-MM-DD
-            const newTime = document.getElementById('editResTime').value; // HH:mm
-            const newMenuId = document.getElementById('editResMenu').value;
-
-            if (!newDate || !newTime) {
-                alert('日時を入力してください');
-                return;
-            }
-
-            // ハイフン区切りのまま送信 (YYYY-MM-DD HH:mm) -> GAS側でパース
-            const newDatetime = newDate + ' ' + newTime;
-
-            if (!confirm('変更を保存しますか？\n（カレンダーも更新されます）')) return;
-
-            // UIフィードバック開始
-            showMessage('変更を保存中...', false);
-            const saveBtn = document.querySelector('#reservationEditForm button.btn-primary');
-            saveBtn.disabled = true;
-            saveBtn.textContent = '保存中...';
-
-            fetch(GAS_URL, {
-                method: 'POST',
-                body: JSON.stringify({
-                    action: 'update_reservation',
-                    reservationId: id,
-                    newDatetime: newDatetime,
-                    newMenuId: newMenuId
-                })
-            }).then(res => {
-                if (!res.ok) throw new Error('Network response was not ok');
-                return res.json();
-            })
-                .then(data => {
-                    if (data.status === 'success') {
-                        showMessage('予約を変更しました');
-                        closeReservationEdit();
-                        loadData(); // Reload
-                    } else {
-                        showMessage('エラー: ' + data.message, true);
+                    // Available Status
+                    if (count > 0) {
+                        events.push({
+                            title: '○',
+                            start: date,
+                            textColor: '#28a745',
+                            backgroundColor: 'transparent',
+                            borderColor: 'transparent',
+                            classNames: ['fs-4', 'fw-bold', 'text-center']
+                        });
+                        // Optional: Show count
+                        // events.push({ title: count + '枠', start: date, display:'background' });
+                    } else if (resCount > 0 && count === 0) {
+                        // Full? Or just no open slots but has reservations
+                        events.push({
+                            title: '満',
+                            start: date,
+                            textColor: '#dc3545', // Red
+                            backgroundColor: 'transparent',
+                            borderColor: 'transparent',
+                            classNames: ['fs-4', 'fw-bold', 'text-center']
+                        });
                     }
-                })
-                .catch(e => {
-                    console.error(e);
-                    showMessage('エラーが発生しました: ' + e.message, true);
-                })
-                .finally(() => {
-                    // ボタンの状態を戻す
-                    saveBtn.disabled = false;
-                    saveBtn.textContent = '変更保存';
-                });
-        }
 
-        function cancelReservationAction(id) {
-            if (!confirm('本当にこの予約を取り消しますか？\n（カレンダーからも削除されます）')) return;
-
-            fetch(GAS_URL, {
-                method: 'POST',
-                body: JSON.stringify({ action: 'cancel_reservation', reservationId: id })
-            }).then(res => res.json())
-                .then(data => {
-                    if (data.status === 'success') {
-                        showMessage('予約を取り消しました', true); // Show as 'success' style visually but maybe red message
-                        loadData();
-                    } else {
-                        showMessage('エラー: ' + data.message, true);
+                    // Reservation Count Badge
+                    if (resCount > 0) {
+                        events.push({
+                            title: resCount + '件予約',
+                            start: date,
+                            backgroundColor: '#ffc107',
+                            borderColor: '#ffc107',
+                            textColor: '#000',
+                            classNames: ['small', 'px-1']
+                        });
                     }
                 });
-        }
 
+                return events;
+            },
 
-        renderSlots();
+            openDaySlotModal: function (dateStr) {
+                this.currentEditDate = dateStr;
+                const d = new Date(dateStr);
+                const dayName = ['日', '月', '火', '水', '木', '金', '土'][d.getDay()];
+                const dateDisplay = `${d.getFullYear()}年${d.getMonth() + 1}月${d.getDate()}日 (${dayName})`;
+                document.getElementById('slotEditDateDisplay').textContent = dateDisplay;
 
+                const container = document.getElementById('slotEditList');
+                container.innerHTML = '';
+
+                // 1. Generate Candidates
+                const dayId = d.getDay();
+                const settings = this.basicSettings.weekly && this.basicSettings.weekly.find(x => x.dayId == dayId);
+                const interval = parseInt(this.basicSettings.interval) || 60;
+
+                let candidates = [];
+                // Default fallback if no settings
+                let startT = "10:00", endT = "20:00", bStart = "", bEnd = "";
+                let isClosed = false;
+
+                if (settings) {
+                    startT = settings.startTime || "10:00";
+                    endT = settings.endTime || "20:00";
+                    bStart = settings.breakStart;
+                    bEnd = settings.breakEnd;
+                    if (settings.status === '休業') isClosed = true;
+                }
+
+                if (isClosed && (!this.slots || !this.slots.some(s => s.value.startsWith(dateStr.replace(/-/g, '/'))))) {
+                    // Closed and no current slots -> Show Closed Message but allow manual add?
+                    // For now, let's generate standard slots but unchecked.
+                }
+
+                // Generate time series
+                const toMin = (s) => parseInt(s.split(':')[0]) * 60 + parseInt(s.split(':')[1]);
+                const toTime = (m) => ('0' + Math.floor(m / 60)).slice(-2) + ':' + ('0' + (m % 60)).slice(-2);
+
+                let cur = toMin(startT);
+                let end = toMin(endT);
+                let bS = bStart ? toMin(bStart) : -1;
+                let bE = bEnd ? toMin(bEnd) : -1;
+
+                // Safety loop
+                let safety = 0;
+                while (cur < end && safety < 100) {
+                    safety++;
+                    // Skip break
+                    if (bS !== -1 && bE !== -1) {
+                        // If time is within break
+                        if (cur >= bS && cur < bE) {
+                            cur += interval;
+                            continue;
+                        }
+                    }
+
+                    candidates.push(toTime(cur));
+                    cur += interval;
+                }
+
+                // 2. Identify Status
+                // "YYYY/MM/DD HH:mm"
+                const activeTimes = [];
+                const prefix = dateStr.replace(/-/g, '/') + ' ';
+                this.slots.forEach(s => {
+                    if (s.value.startsWith(prefix)) {
+                        activeTimes.push(s.value.split(' ')[1]);
+                    }
+                });
+
+                const reservedTimes = [];
+                this.reservations.forEach(r => {
+                    if (r.status === 'キャンセル') return;
+                    const rd = new Date(r.date);
+                    const rDateStr = rd.toISOString().split('T')[0];
+                    if (rDateStr === dateStr) {
+                        // Extract HH:mm
+                        reservedTimes.push(toTime(rd.getHours() * 60 + rd.getMinutes()));
+                    }
+                });
+
+                // Merge: 
+                // Ensure all existing slots (even manually added ones not in candidates) are shown?
+                // For simplicity, we stick to candidates + any active slots not in candidates
+                activeTimes.forEach(t => {
+                    if (!candidates.includes(t)) candidates.push(t);
+                });
+                candidates.sort(); // Sort times
+
+                if (candidates.length === 0) {
+                    container.innerHTML = '<div class="text-center text-muted p-3">設定可能な枠がありません（休業日または時間外）</div>';
+                }
+
+                candidates.forEach(time => {
+                    const isActive = activeTimes.includes(time);
+                    // Reserved check: Fuzzy match. If a reservation starts at this time.
+                    const isReserved = reservedTimes.includes(time);
+
+                    const div = document.createElement('div');
+                    div.className = 'slot-item';
+
+                    const label = document.createElement('div');
+                    label.className = 'slot-time';
+                    label.textContent = time;
+
+                    let control;
+                    if (isReserved) {
+                        control = document.createElement('span');
+                        control.className = 'badge bg-warning text-dark';
+                        control.textContent = '予約済';
+                    } else {
+                        const switchDiv = document.createElement('div');
+                        switchDiv.className = 'form-check form-switch mb-0';
+
+                        const input = document.createElement('input');
+                        input.className = 'form-check-input slot-toggle';
+                        input.type = 'checkbox';
+                        input.value = time;
+                        input.checked = isActive;
+
+                        switchDiv.appendChild(input);
+                        control = switchDiv;
+                    }
+
+                    div.appendChild(label);
+                    div.appendChild(control);
+                    container.appendChild(div);
+                });
+
+                const modal = new bootstrap.Modal(document.getElementById('slotEditModal'));
+                modal.show();
+            },
+
+            saveDaySlots: function () {
+                const dateStr = this.currentEditDate;
+                const checks = document.querySelectorAll('.slot-toggle:checked');
+                const slots = Array.from(checks).map(c => {
+                    return dateStr + ' ' + c.value;
+                });
+
+                this.showLoading(true);
+                fetch(GAS_URL, {
+                    method: 'POST',
+                    body: JSON.stringify({
+                        action: 'update_day_slots',
+                        date: dateStr,
+                        slots: slots
+                    })
+                })
+                    .then(r => r.json())
+                    .then(data => {
+                        this.showLoading(false);
+                        if (data.status === 'success') {
+                            this.showToast('予約枠を更新しました');
+                            bootstrap.Modal.getInstance(document.getElementById('slotEditModal')).hide();
+                            this.fetchAdminData();
+                        } else {
+                            alert('Error: ' + data.message);
+                        }
+                    });
+            },
+
+            // --- Basic Settings UI ---
+            renderBasicSettings: function () {
+                const tbody = document.getElementById('basic-settings-tbody');
+                tbody.innerHTML = '';
+                document.getElementById('setting-interval').value = this.basicSettings.interval || 60;
+
+                const days = this.basicSettings.weekly || [];
+                // If empty, generate default structure logic already handled in backend, 
+                // but if waiting for fetch, might be empty.
+
+                days.forEach(d => {
+                    const tr = document.createElement('tr');
+                    tr.dataset.dayId = d.dayId;
+
+                    tr.innerHTML = `
+                        <td class="fw-bold text-bg-light">${d.dayName}</td>
+                        <td>
+                            <select class="form-select form-select-sm status-select">
+                                <option value="営業" ${d.status === '営業' ? 'selected' : ''}>営業</option>
+                                <option value="休業" ${d.status === '休業' ? 'selected' : ''}>休業</option>
+                            </select>
+                        </td>
+                        <td><input type="time" class="form-control form-control-sm start-time" value="${d.startTime}"></td>
+                        <td><input type="time" class="form-control form-control-sm end-time" value="${d.endTime}"></td>
+                        <td><input type="time" class="form-control form-control-sm break-start" value="${d.breakStart}"></td>
+                        <td><input type="time" class="form-control form-control-sm break-end" value="${d.breakEnd}"></td>
+                    `;
+                    tbody.appendChild(tr);
+                });
+            },
+
+            saveBasicSettings: function () {
+                const rows = document.querySelectorAll('#basic-settings-tbody tr');
+                const weekly = Array.from(rows).map(row => {
+                    return {
+                        dayId: row.dataset.dayId,
+                        dayName: row.cells[0].textContent,
+                        status: row.querySelector('.status-select').value,
+                        startTime: row.querySelector('.start-time').value,
+                        endTime: row.querySelector('.end-time').value,
+                        breakStart: row.querySelector('.break-start').value,
+                        breakEnd: row.querySelector('.break-end').value
+                    };
+                });
+
+                const interval = document.getElementById('setting-interval').value;
+
+                this.showLoading(true);
+                fetch(GAS_URL, {
+                    method: 'POST',
+                    body: JSON.stringify({
+                        action: 'save_basic_settings',
+                        settings: { weekly: weekly, interval: interval }
+                    })
+                })
+                    .then(r => r.json())
+                    .then(data => {
+                        this.showLoading(false);
+                        if (data.status === 'success') {
+                            this.showToast('基本設定を保存しました');
+                            // Force refresh to update calendar view immediately if needed
+                            this.fetchAdminData();
+                        } else {
+                            alert('Error: ' + data.message);
+                        }
+                    });
+            },
+
+            // --- Menu Logic (Legacy Port) ---
+            renderMenuSettings: function () {
+                const list = document.getElementById('menu-list');
+                list.innerHTML = '';
+                this.menu.forEach(item => {
+                    const div = document.createElement('div');
+                    div.className = 'list-group-item d-flex justify-content-between align-items-center mb-1 border rounded ';
+
+                    const priceFmt = Number(item.price).toLocaleString();
+
+                    div.innerHTML = `
+                        <div class="flex-grow-1">
+                            <h5 class="mb-1 fw-bold">${item.name} <span class="badge bg-light text-dark border ms-2 small">${item.duration}分</span></h5>
+                            <p class="mb-1">¥${priceFmt}</p>
+                            <small class="text-muted">${item.description || ''}</small>
+                            ${item.section ? '<div class="badge bg-info bg-opacity-10 text-info border border-info mt-1">' + item.section + '</div>' : ''}
+                        </div>
+                        <div class="ms-3 d-flex flex-column gap-2">
+                             <div class="btn-group btn-group-sm">
+                                <button class="btn btn-outline-secondary" onclick="app.moveMenu('${item.id}', -1)">↑</button>
+                                <button class="btn btn-outline-secondary" onclick="app.moveMenu('${item.id}', 1)">↓</button>
+                             </div>
+                             <div class="btn-group btn-group-sm">
+                                <button class="btn btn-outline-primary" onclick='app.openMenuEdit(${JSON.stringify(item).replace(/'/g, "&#39;")})'>編集</button>
+                                <button class="btn btn-outline-danger" onclick="app.deleteMenu('${item.id}')">削除</button>
+                             </div>
+                        </div>
+                    `;
+                    list.appendChild(div);
+                });
+            },
+
+            showMenuModal: function () {
+                // Reset form
+                document.getElementById('menuId').value = '';
+                document.getElementById('menuName').value = '';
+                document.getElementById('menuPrice').value = '';
+                document.getElementById('menuDuration').value = '';
+                document.getElementById('menuSection').value = '';
+                document.getElementById('menuDesc').value = '';
+                document.getElementById('menuEditModalTitle').textContent = '新規メニュー追加';
+
+                new bootstrap.Modal(document.getElementById('menuEditModal')).show();
+            },
+
+            openMenuEdit: function (item) {
+                document.getElementById('menuId').value = item.id;
+                document.getElementById('menuName').value = item.name;
+                document.getElementById('menuPrice').value = item.price;
+                document.getElementById('menuDuration').value = item.duration;
+                document.getElementById('menuSection').value = item.section || '';
+                document.getElementById('menuDesc').value = item.description || '';
+                document.getElementById('menuOrder').value = item.order;
+                document.getElementById('menuEditModalTitle').textContent = 'メニュー編集';
+
+                new bootstrap.Modal(document.getElementById('menuEditModal')).show();
+            },
+
+            saveMenu: function () {
+                const item = {
+                    id: document.getElementById('menuId').value,
+                    name: document.getElementById('menuName').value,
+                    price: document.getElementById('menuPrice').value,
+                    duration: document.getElementById('menuDuration').value,
+                    description: document.getElementById('menuDesc').value,
+                    section: document.getElementById('menuSection').value,
+                    order: document.getElementById('menuOrder').value
+                };
+
+                this.showLoading(true);
+                fetch(GAS_URL, {
+                    method: 'POST',
+                    body: JSON.stringify({ action: 'save_menu', item: item })
+                }).then(() => {
+                    this.showLoading(false);
+                    this.showToast('メニューを保存しました');
+                    bootstrap.Modal.getInstance(document.getElementById('menuEditModal')).hide();
+                    this.fetchAdminData();
+                });
+            },
+
+            deleteMenu: function (id) {
+                if (!confirm('削除しますか？')) return;
+                fetch(GAS_URL, {
+                    method: 'POST',
+                    body: JSON.stringify({ action: 'delete_menu', id: id })
+                }).then(() => {
+                    this.showToast('削除しました');
+                    this.fetchAdminData();
+                });
+            },
+
+            moveMenu: function (id, dir) {
+                const idx = this.menu.findIndex(x => x.id === id);
+                if (idx < 0) return;
+                const newIdx = idx + dir;
+                if (newIdx < 0 || newIdx >= this.menu.length) return;
+
+                const temp = this.menu[idx];
+                this.menu[idx] = this.menu[newIdx];
+                this.menu[newIdx] = temp;
+
+                this.renderMenuSettings(); // Optimistic
+
+                const ids = this.menu.map(x => x.id);
+                fetch(GAS_URL, {
+                    method: 'POST',
+                    body: JSON.stringify({ action: 'reorder_menu', ids: ids })
+                });
+            },
+
+            // --- Reservation List Logic ---
+            renderReservationList: function () {
+                const tbody = document.getElementById('reservation-list-body');
+                tbody.innerHTML = '';
+
+                if (this.reservations.length === 0) {
+                    document.getElementById('no-reservations-msg').classList.remove('d-none');
+                } else {
+                    document.getElementById('no-reservations-msg').classList.add('d-none');
+                    this.reservations.forEach(res => {
+                        const tr = document.createElement('tr');
+
+                        const menu = this.menu.find(m => m.id === res.menuId);
+                        const menuName = menu ? menu.name : res.menuId;
+                        const isCancel = res.status === 'キャンセル';
+
+                        if (isCancel) tr.classList.add('table-secondary', 'text-muted');
+
+                        tr.innerHTML = `
+                            <td>${res.displayDate}</td>
+                            <td>${res.name}</td>
+                            <td>${menuName}</td>
+                            <td>${res.price ? parseInt(res.price).toLocaleString() : '-'}</td>
+                            <td>${res.phone}</td>
+                            <td>${isCancel ? '<span class="badge bg-secondary">キャンセル</span>' : '<span class="badge bg-success">受付</span>'}</td>
+                            <td>
+                                ${!isCancel ? `
+                                <button class="btn btn-sm btn-outline-primary me-1" onclick='app.openResEdit(${JSON.stringify(res).replace(/'/g, "&#39;")})'>変更</button>
+                                <button class="btn btn-sm btn-outline-danger" onclick="app.cancelRes('${res.id}')">取消</button>
+                                ` : ''}
+                            </td>
+                        `;
+                        tbody.appendChild(tr);
+                    });
+                }
+            },
+
+            openResEdit: function (res) {
+                document.getElementById('resId').value = res.id;
+                document.getElementById('resDisplayTitle').textContent = `${res.displayDate} - ${res.name}様`;
+                const parts = res.date.split(' ');
+                document.getElementById('resDate').value = parts[0].replace(/\//g, '-');
+                document.getElementById('resTime').value = parts[1];
+
+                const sel = document.getElementById('resMenu');
+                sel.innerHTML = '';
+                this.menu.forEach(m => {
+                    const opt = document.createElement('option');
+                    opt.value = m.id;
+                    opt.textContent = m.name + ' (' + m.duration + '分)';
+                    if (m.id === res.menuId) opt.selected = true;
+                    sel.appendChild(opt);
+                });
+
+                new bootstrap.Modal(document.getElementById('resEditModal')).show();
+            },
+
+            saveReservation: function () {
+                const id = document.getElementById('resId').value;
+                const d = document.getElementById('resDate').value;
+                const t = document.getElementById('resTime').value;
+                const m = document.getElementById('resMenu').value;
+
+                if (!d || !t) return alert('日時を指定してください');
+
+                const datetime = d + ' ' + t; // "YYYY-MM-DD HH:mm"
+
+                if (!confirm('変更しますか？')) return;
+
+                this.showLoading(true);
+                const btn = document.getElementById('resSaveBtn');
+                btn.disabled = true;
+
+                fetch(GAS_URL, {
+                    method: 'POST',
+                    body: JSON.stringify({
+                        action: 'update_reservation',
+                        reservationId: id,
+                        newDatetime: datetime,
+                        newMenuId: m
+                    })
+                })
+                    .then(r => r.json())
+                    .then(data => {
+                        this.showLoading(false);
+                        btn.disabled = false;
+                        if (data.status === 'success') {
+                            this.showToast('変更しました');
+                            bootstrap.Modal.getInstance(document.getElementById('resEditModal')).hide();
+                            this.fetchAdminData();
+                        } else {
+                            alert('エラー: ' + data.message);
+                        }
+                    });
+            },
+
+            cancelRes: function (id) {
+                if (!confirm('本当に取り消しますか？')) return;
+                fetch(GAS_URL, {
+                    method: 'POST',
+                    body: JSON.stringify({ action: 'cancel_reservation', reservationId: id })
+                })
+                    .then(r => r.json())
+                    .then(data => {
+                        if (data.status === 'success') {
+                            this.showToast('キャンセルしました');
+                            this.fetchAdminData();
+                        } else {
+                            alert('Error: ' + data.message);
+                        }
+                    });
+            },
+
+            showLoading: function (show) {
+                document.getElementById('loading-overlay').style.display = show ? 'flex' : 'none';
+            },
+
+            showToast: function (msg) {
+                document.getElementById('toast-message').textContent = msg;
+                var el = document.getElementById('liveToast');
+                new bootstrap.Toast(el).show();
+            }
+        };
 
         // Init
-        checkAuth();
-
+        window.addEventListener('DOMContentLoaded', () => {
+            // Check auth logic / Init
+            // app.login() or show login
+        });
     </script>
 </body>
 

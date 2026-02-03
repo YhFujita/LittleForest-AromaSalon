@@ -6,8 +6,10 @@ var SheetUtils = (function () {
     var SHEET_NAME_MENU = 'メニュー設定';
     var SHEET_NAME_SLOTS = '予約可能日時';
     var SHEET_NAME_SETTINGS = '設定';
+    var SHEET_NAME_BASIC_SETTINGS = '基本設定';
     var CACHE_KEY_MENU = 'MENU_CACHE';
     var CACHE_KEY_SLOTS = 'SLOTS_CACHE';
+    var CACHE_KEY_BASIC_SETTINGS = 'BASIC_SETTINGS_CACHE';
 
     function getSheet(name) {
         var id = PropertiesService.getScriptProperties().getProperty('SPREADSHEET_ID');
@@ -55,29 +57,32 @@ var SheetUtils = (function () {
                     '■金額: {{price}}円\n\n' +
                     'ご来店をお待ちしております。';
                 sheet.appendRow(['LINE_MESSAGE_TEMPLATE', defaultTemplate]);
+                sheet.appendRow(['SLOT_INTERVAL', '60']); // Default interval
+            } else if (name === SHEET_NAME_BASIC_SETTINGS) {
+                // 曜日ごとの設定 (0:日, 1:月, ... 6:土)
+                sheet.appendRow(['曜日ID', '曜日名', '営業ステータス', '開始時間', '終了時間', '休憩開始', '休憩終了']);
+                var days = ['日', '月', '火', '水', '木', '金', '土'];
+                for (var i = 0; i < 7; i++) {
+                    // Default: 10:00 - 20:00, Closed on Sunday(0) maybe? Let's default to Open all for now
+                    sheet.appendRow([i, days[i], '営業', '10:00', '20:00', '', '']);
+                }
             }
         } else if (name === SHEET_NAME_RESERVATIONS) {
-            // Check for Migration (Add MenuName, TaxExcl, Tax Columns)
-            // Old Header: [希望日時, 予約ID, 予約者名, メニュー, 金額, ...]
-            // New Header: [希望日時, 予約ID, 予約者名, メニュー(ID), メニュー名, 税抜金額, 消費税, 金額(税込), ...]
+            // ... (Existing migration logic) ...
             var header = sheet.getRange(1, 1, 1, 10).getValues()[0];
-            // E列(index 4)が「金額」だったら旧形式
             if (header[4] === '金額') {
-                // D列(index 3, メニュー)の後に3列挿入
                 sheet.insertColumnsAfter(4, 3);
-                // ヘッダー更新
                 sheet.getRange(1, 4).setValue('メニュー(ID)');
                 sheet.getRange(1, 5).setValue('メニュー名');
                 sheet.getRange(1, 6).setValue('税抜金額');
                 sheet.getRange(1, 7).setValue('消費税');
                 sheet.getRange(1, 8).setValue('金額(税込)');
-                // 以降のヘッダーは自動的にずれているはずだが、念のため確認
-                // F->I, G->J, H->K, I->L, J->M
             }
         }
         return sheet;
     }
 
+    // ... (Existing formatDateJP, parseDatetimeString) ...
     function formatDateJP(date) {
         var days = ['日', '月', '火', '水', '木', '金', '土'];
         var y = date.getFullYear();
@@ -89,7 +94,6 @@ var SheetUtils = (function () {
         return y + '年' + m + '月' + d + '日(' + day + ') ' + H + ':' + M;
     }
 
-    // 日付文字列のパース用ヘルパー関数
     function parseDatetimeString(datetimeStr) {
         if (!datetimeStr) return null;
         var normalized = String(datetimeStr).replace(/\//g, '-');
@@ -109,6 +113,182 @@ var SheetUtils = (function () {
     }
 
     return {
+        // ... (Existing functions: appendReservation, getMenuItems, updateMenuCache, getAvailableSlots, updateSlotsCache, reserveSlot, addSlots) ...
+
+        getBasicSettings: function () {
+            var scriptProperties = PropertiesService.getScriptProperties();
+            var cached = scriptProperties.getProperty(CACHE_KEY_BASIC_SETTINGS);
+            if (cached) return JSON.parse(cached);
+            return this.updateBasicSettingsCache();
+        },
+
+        updateBasicSettingsCache: function () {
+            var sheet = getSheet(SHEET_NAME_BASIC_SETTINGS);
+            var data = sheet.getDataRange().getValues();
+            data.shift(); // Remove header
+
+            var settings = data.map(function (row) {
+                return {
+                    dayId: row[0],
+                    dayName: row[1],
+                    status: row[2], // '営業' or '休業'
+                    startTime: row[3] ? Utilities.formatDate(new Date('1970/01/01 ' + row[3]), Session.getScriptTimeZone(), 'HH:mm') : '',
+                    endTime: row[4] ? Utilities.formatDate(new Date('1970/01/01 ' + row[4]), Session.getScriptTimeZone(), 'HH:mm') : '',
+                    breakStart: row[5] ? Utilities.formatDate(new Date('1970/01/01 ' + row[5]), Session.getScriptTimeZone(), 'HH:mm') : '',
+                    breakEnd: row[6] ? Utilities.formatDate(new Date('1970/01/01 ' + row[6]), Session.getScriptTimeZone(), 'HH:mm') : ''
+                };
+            });
+
+            // Handle pure time strings that might not parse with new Date('1970...') if cell is strictly text '10:00'
+            // The above simple parse often works in GAS if cell is formatted as time or string. 
+            // Better robust way: check if row[3] is Date object or string.
+            // But let's refine map a bit to be safe.
+            settings = data.map(function (row) {
+                var formatTime = function (val) {
+                    if (!val) return '';
+                    if (val instanceof Date) {
+                        return Utilities.formatDate(val, Session.getScriptTimeZone(), 'HH:mm');
+                    }
+                    return String(val); // Assume "HH:mm" string
+                };
+                return {
+                    dayId: row[0],
+                    dayName: row[1],
+                    status: row[2],
+                    startTime: formatTime(row[3]),
+                    endTime: formatTime(row[4]),
+                    breakStart: formatTime(row[5]),
+                    breakEnd: formatTime(row[6])
+                };
+            });
+
+            // Get Interval from SETTINGS sheet
+            var settingsSheet = getSheet(SHEET_NAME_SETTINGS);
+            var settingsData = settingsSheet.getDataRange().getValues();
+            var interval = 60; // Default
+            for (var i = 1; i < settingsData.length; i++) {
+                if (settingsData[i][0] === 'SLOT_INTERVAL') {
+                    interval = parseInt(settingsData[i][1], 10) || 60;
+                    break;
+                }
+            }
+
+            var result = {
+                weekly: settings,
+                interval: interval
+            };
+
+            PropertiesService.getScriptProperties().setProperty(CACHE_KEY_BASIC_SETTINGS, JSON.stringify(result));
+            return result;
+        },
+
+        saveBasicSettings: function (settings) {
+            // settings: { weekly: [...], interval: 60 }
+            var sheet = getSheet(SHEET_NAME_BASIC_SETTINGS);
+            // Update weekly
+            // Assuming settings.weekly is array of 7 items sorted by dayId
+            var weeklyData = settings.weekly.map(function (item) {
+                return [
+                    item.dayId,
+                    item.dayName,
+                    item.status,
+                    item.startTime,
+                    item.endTime,
+                    item.breakStart,
+                    item.breakEnd
+                ];
+            });
+
+            // Overwrite from row 2
+            if (weeklyData.length > 0) {
+                sheet.getRange(2, 1, weeklyData.length, 7).setValues(weeklyData);
+            }
+
+            // Update Interval
+            var settingsSheet = getSheet(SHEET_NAME_SETTINGS);
+            var sData = settingsSheet.getDataRange().getValues();
+            var found = false;
+            for (var i = 1; i < sData.length; i++) {
+                if (sData[i][0] === 'SLOT_INTERVAL') {
+                    settingsSheet.getRange(i + 1, 2).setValue(settings.interval);
+                    found = true;
+                    break;
+                }
+            }
+            if (!found) {
+                settingsSheet.appendRow(['SLOT_INTERVAL', settings.interval]);
+            }
+
+            return this.updateBasicSettingsCache();
+        },
+
+        updateDaySlots: function (targetDateStr, activeSlots) {
+            // targetDateStr: "YYYY-MM-DD"
+            // activeSlots: ["YYYY-MM-DD HH:mm", ...]
+            var sheet = getSheet(SHEET_NAME_SLOTS);
+            var data = sheet.getDataRange().getValues();
+            var timeZone = Session.getScriptTimeZone();
+
+            // 1. Identify rows to delete (Open slots on that day)
+            // We iterate backwards to delete safely
+            for (var i = data.length - 1; i >= 1; i--) {
+                var rowDate = new Date(data[i][0]);
+                if (isNaN(rowDate.getTime())) continue;
+                var rowDateStr = Utilities.formatDate(rowDate, timeZone, 'yyyy-MM-dd');
+
+                if (rowDateStr === targetDateStr) {
+                    var status = data[i][1];
+                    // Only delete '空き'. Keep '予約済' or others.
+                    if (status === '空き') {
+                        sheet.deleteRow(i + 1);
+                    }
+                }
+            }
+
+            // 2. Add new slots
+            if (activeSlots && activeSlots.length > 0) {
+                // Need to filter out slots that already exist (e.g. '予約済' ones we kept)
+                // Let's re-fetch data to be sure
+                var currentData = sheet.getDataRange().getValues();
+                var existingTimeSet = {};
+                for (var i = 1; i < currentData.length; i++) {
+                    var d = new Date(currentData[i][0]);
+                    if (!isNaN(d.getTime())) {
+                        var tStr = Utilities.formatDate(d, timeZone, 'yyyy/MM/dd HH:mm');
+                        existingTimeSet[tStr] = true;
+                    }
+                }
+
+                var rowsToAdd = [];
+                activeSlots.forEach(function (slotStr) {
+                    // slotStr should be formatted as needed, assuming input is parseable
+                    var sDate = new Date(slotStr);
+                    var sDateStr = Utilities.formatDate(sDate, timeZone, 'yyyy/MM/dd HH:mm');
+
+                    if (!existingTimeSet[sDateStr]) {
+                        rowsToAdd.push([sDate, '空き']);
+                    }
+                });
+
+                if (rowsToAdd.length > 0) {
+                    var lastRow = sheet.getLastRow();
+                    var range = sheet.getRange(lastRow + 1, 1, rowsToAdd.length, 2);
+                    range.setNumberFormat('yyyy"年"M"月"d"日"(ddd) HH:mm');
+                    range.setValues(rowsToAdd);
+                }
+            }
+
+            // 3. Sort
+            var totalRows = sheet.getLastRow();
+            if (totalRows > 1) {
+                sheet.getRange(2, 1, totalRows - 1, 2).sort([
+                    { column: 2, ascending: false },
+                    { column: 1, ascending: true }
+                ]);
+            }
+            return this.updateSlotsCache();
+        },
+
         appendReservation: function (data) {
             var sheet = getSheet(SHEET_NAME_RESERVATIONS);
             var id = Utilities.getUuid();

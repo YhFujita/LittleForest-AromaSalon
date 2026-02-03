@@ -33,7 +33,24 @@ function doPost(e) {
             var menu = SheetUtils.getMenuItems();
             var slots = SheetUtils.getAvailableSlots();
             var reservations = SheetUtils.getReservations();
-            output.setContent(JSON.stringify({ status: 'success', menu: menu, slots: slots, reservations: reservations }));
+            var basicSettings = SheetUtils.getBasicSettings();
+            output.setContent(JSON.stringify({
+                status: 'success',
+                menu: menu,
+                slots: slots,
+                reservations: reservations,
+                basicSettings: basicSettings
+            }));
+            return output;
+        }
+
+        if (action === 'save_basic_settings') {
+            try {
+                SheetUtils.saveBasicSettings(data.settings);
+                output.setContent(JSON.stringify({ status: 'success' }));
+            } catch (e) {
+                output.setContent(JSON.stringify({ status: 'error', message: e.toString() }));
+            }
             return output;
         }
 
@@ -61,6 +78,16 @@ function doPost(e) {
                 output.setContent(JSON.stringify({ status: 'success' }));
             } else {
                 output.setContent(JSON.stringify({ status: 'error', message: 'Slot not found' }));
+            }
+            return output;
+        }
+
+        if (action === 'update_day_slots') {
+            try {
+                SheetUtils.updateDaySlots(data.date, data.slots);
+                output.setContent(JSON.stringify({ status: 'success' }));
+            } catch (e) {
+                output.setContent(JSON.stringify({ status: 'error', message: e.toString() }));
             }
             return output;
         }
