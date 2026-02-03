@@ -144,7 +144,9 @@ var SheetUtils = (function () {
 
     function parseDatetimeString(datetimeStr) {
         if (!datetimeStr) return null;
-        var normalized = String(datetimeStr).replace(/\//g, '-');
+        var s = String(datetimeStr);
+        // YYYY-MM-DD HH:mm
+        var normalized = s.replace(/\//g, '-');
         var match = normalized.match(/(\d{4})-(\d{1,2})-(\d{1,2})\s+(\d{1,2}):(\d{2})/);
         if (match) {
             return new Date(
@@ -155,6 +157,20 @@ var SheetUtils = (function () {
                 parseInt(match[5], 10)
             );
         }
+
+        // Japanese Format: YYYY年MM月DD日(...) HH:mm OR YYYY年MM月DD日 HH:mm
+        // Use loose matching for the part between day and time
+        var matchJP = s.match(/(\d+)年(\d+)月(\d+)日.*(\d+):(\d+)/);
+        if (matchJP) {
+            return new Date(
+                parseInt(matchJP[1], 10),
+                parseInt(matchJP[2], 10) - 1,
+                parseInt(matchJP[3], 10),
+                parseInt(matchJP[4], 10),
+                parseInt(matchJP[5], 10)
+            );
+        }
+
         var d = new Date(datetimeStr);
         if (!isNaN(d.getTime())) return d;
         return null;
@@ -433,12 +449,14 @@ var SheetUtils = (function () {
             var slots = data.filter(function (row) {
                 return row[1] === '空き';
             }).map(function (row) {
-                var date = new Date(row[0]);
+                var date = parseDatetimeString(row[0]);
+                if (!date || isNaN(date.getTime())) return null;
+
                 return {
                     value: Utilities.formatDate(date, Session.getScriptTimeZone(), 'yyyy/MM/dd HH:mm'),
                     display: formatDateJP(date)
                 };
-            });
+            }).filter(function (s) { return s !== null; });
 
             slots.sort(function (a, b) {
                 return a.value.localeCompare(b.value);
@@ -454,7 +472,9 @@ var SheetUtils = (function () {
             var timeZone = Session.getScriptTimeZone();
 
             for (var i = 1; i < data.length; i++) {
-                var cellDate = new Date(data[i][0]);
+                var cellDate = parseDatetimeString(data[i][0]);
+                if (!cellDate || isNaN(cellDate.getTime())) continue;
+
                 var cellStatus = data[i][1];
                 var cellDateStr = Utilities.formatDate(cellDate, timeZone, 'yyyy/MM/dd HH:mm');
 
@@ -475,8 +495,8 @@ var SheetUtils = (function () {
             var existingData = sheet.getDataRange().getValues();
             var existingTimes = {};
             for (var i = 1; i < existingData.length; i++) {
-                var d = new Date(existingData[i][0]);
-                if (!isNaN(d.getTime())) {
+                var d = parseDatetimeString(existingData[i][0]);
+                if (d && !isNaN(d.getTime())) {
                     existingTimes[d.getTime()] = true;
                 }
             }
@@ -512,7 +532,8 @@ var SheetUtils = (function () {
             var timeZone = Session.getScriptTimeZone();
 
             for (var i = 1; i < data.length; i++) {
-                var cellDate = new Date(data[i][0]);
+                var cellDate = parseDatetimeString(data[i][0]);
+                if (!cellDate || isNaN(cellDate.getTime())) continue;
                 var cellDateStr = Utilities.formatDate(cellDate, timeZone, 'yyyy/MM/dd HH:mm');
 
                 if (cellDateStr === targetDatetimeStr) {
@@ -530,7 +551,8 @@ var SheetUtils = (function () {
             var timeZone = Session.getScriptTimeZone();
 
             for (var i = 1; i < data.length; i++) {
-                var cellDate = new Date(data[i][0]);
+                var cellDate = parseDatetimeString(data[i][0]);
+                if (!cellDate || isNaN(cellDate.getTime())) continue;
                 var cellDateStr = Utilities.formatDate(cellDate, timeZone, 'yyyy/MM/dd HH:mm');
 
                 if (cellDateStr === targetDatetimeStr) {
@@ -549,8 +571,8 @@ var SheetUtils = (function () {
             var newDateStr = Utilities.formatDate(newDateObj, timeZone, 'yyyy/MM/dd HH:mm');
 
             for (var i = 1; i < data.length; i++) {
-                var d = new Date(data[i][0]);
-                if (!isNaN(d.getTime())) {
+                var d = parseDatetimeString(data[i][0]);
+                if (d && !isNaN(d.getTime())) {
                     var dStr = Utilities.formatDate(d, timeZone, 'yyyy/MM/dd HH:mm');
                     if (dStr === newDateStr) {
                         return { success: false, message: 'その日時は既に存在します' };
@@ -559,7 +581,8 @@ var SheetUtils = (function () {
             }
 
             for (var i = 1; i < data.length; i++) {
-                var cellDate = new Date(data[i][0]);
+                var cellDate = parseDatetimeString(data[i][0]);
+                if (!cellDate || isNaN(cellDate.getTime())) continue;
                 var cellDateStr = Utilities.formatDate(cellDate, timeZone, 'yyyy/MM/dd HH:mm');
 
                 if (cellDateStr === currentDatetimeStr) {
@@ -644,34 +667,15 @@ var SheetUtils = (function () {
 
             for (var i = 1; i < data.length; i++) {
                 var row = data[i];
-                var d = new Date(row[0]);
-                if (isNaN(d.getTime())) {
-                    var match = String(row[0]).match(/(\d+)年(\d+)月(\d+)日\s*\(.\)\s*(\d+):(\d+)/);
-                    if (match) {
-                        d = new Date(
-                            parseInt(match[1], 10),
-                            parseInt(match[2], 10) - 1,
-                            parseInt(match[3], 10),
-                            parseInt(match[4], 10),
-                            parseInt(match[5], 10)
-                        );
-                    }
-                }
-                if (isNaN(d.getTime())) continue;
+                var d = parseDatetimeString(row[0]);
+
+                if (!d || isNaN(d.getTime())) continue;
 
                 // Columns: 
                 // 0:Date, 1:ID, 2:Name, 3:MenuID, 4:MenuName, 5:Excl, 6:Tax, 7:Incl, 8:Time, 9:Phone, 10:Notes, 11:Status, 12:EventID
                 // 注意: 旧データで列が不足している場合のガードが必要かもしれないが、
                 // getSheetで列挿入しているので data.length は増えているはず?
                 // data = getValues() はシート全体のデータを取るので、行によって列数が違うことはない(空白になる)
-
-                // 互換性: 旧データのこの列は空白かもしれない
-                var price = row[7]; // New Price Column (Incl)
-                if (price === undefined || price === '') {
-                    // もしかして列追加前のキャッシュを見てる？いや getValues() は最新
-                    // マイグレーション直後はデータが入ってないかも
-                    // しかし列シフトで元の"金額"は列7に来ているはず
-                }
 
                 results.push({
                     date: Utilities.formatDate(d, timeZone, 'yyyy/MM/dd HH:mm'),
@@ -723,19 +727,7 @@ var SheetUtils = (function () {
             var data = sheet.getDataRange().getValues();
             for (var i = 1; i < data.length; i++) {
                 if (data[i][1] == reservationId) {
-                    var d = new Date(data[i][0]);
-                    if (isNaN(d.getTime())) {
-                        var match = String(data[i][0]).match(/(\d+)年(\d+)月(\d+)日\s*\(.\)\s*(\d+):(\d+)/);
-                        if (match) {
-                            d = new Date(
-                                parseInt(match[1], 10),
-                                parseInt(match[2], 10) - 1,
-                                parseInt(match[3], 10),
-                                parseInt(match[4], 10),
-                                parseInt(match[5], 10)
-                            );
-                        }
-                    }
+                    var d = parseDatetimeString(data[i][0]);
                     return {
                         row: i + 1,
                         date: d,
@@ -760,28 +752,17 @@ var SheetUtils = (function () {
                     sheet.getRange(i + 1, 12).setValue('キャンセル');
 
                     // 2. Release Slot
-                    var date = new Date(data[i][0]);
-                    if (isNaN(date.getTime())) {
-                        var match = String(data[i][0]).match(/(\d+)年(\d+)月(\d+)日\s*\(.\)\s*(\d+):(\d+)/);
-                        if (match) {
-                            date = new Date(
-                                parseInt(match[1], 10),
-                                parseInt(match[2], 10) - 1,
-                                parseInt(match[3], 10),
-                                parseInt(match[4], 10),
-                                parseInt(match[5], 10)
-                            );
-                        }
+                    var date = parseDatetimeString(data[i][0]);
+                    if (date) {
+                        var dateStr = Utilities.formatDate(date, timeZone, 'yyyy/MM/dd HH:mm');
+                        this.updateSlotStatus(dateStr, '空き');
+                        return {
+                            success: true,
+                            googleEventId: data[i][12], // M列
+                            date: dateStr,
+                            menu: data[i][3]
+                        };
                     }
-                    var dateStr = Utilities.formatDate(date, timeZone, 'yyyy/MM/dd HH:mm');
-                    this.updateSlotStatus(dateStr, '空き');
-
-                    return {
-                        success: true,
-                        googleEventId: data[i][12], // M列
-                        date: dateStr,
-                        menu: data[i][3]
-                    };
                 }
             }
             return { success: false, message: 'Reservation not found' };
@@ -826,8 +807,6 @@ var SheetUtils = (function () {
                     sheet.getRange(row, 8).setValue(price); // 税込 (H)
                 }
             } else if (!newMenuId) {
-                // メニューが変わらない場合でも、価格列などが空なら埋めるべきだが、既存データの更新は今回は必須ではない
-                // ただし、もしメニューIDしかない旧データに対して更新がかかった場合、ここでメニュー名を埋めてあげる親切設計はあり
                 var currentResData = sheet.getRange(row, 1, 1, 8).getValues()[0];
                 var currentMenuName = currentResData[4];
                 if (!currentMenuName) {
@@ -853,5 +832,4 @@ var SheetUtils = (function () {
             };
         }
     };
-
 })();

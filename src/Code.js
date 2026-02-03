@@ -226,60 +226,68 @@ function doPost(e) {
             return output;
         }
 
-        // 1. Honeypot check
-        if (data.honeypot) {
-            console.warn('Bot detected via honeypot');
-            output.setContent(JSON.stringify({ status: 'success', message: 'Received' }));
+        // --- Implicit Action (Reservation) ---
+        // actionがない、または明示的に 'reserve' の場合のみ予約処理へ
+        if (!action || action === 'reserve') {
+            // 1. Honeypot check
+            if (data.honeypot) {
+                console.warn('Bot detected via honeypot');
+                output.setContent(JSON.stringify({ status: 'success', message: 'Received' }));
+                return output;
+            }
+
+            // 2. Available Slot Check (Exclusive Lock)
+            // Attempt to update the slot status. If it fails (already taken), return error.
+            if (!SheetUtils.reserveSlot(data.datetime)) {
+                throw new Error('選択された日時は既に予約が入ってしまいました。別の日時を選択してください。');
+            }
+
+            // 3. Input Validation
+            if (!data.menu || !data.datetime || !data.name || !data.phone) {
+                throw new Error('必須項目が不足しています');
+            }
+            if (data.name.length > 50) throw new Error('名前が長すぎます');
+            if (data.phone.length > 20) throw new Error('電話番号の形式が正しくありません');
+            if (data.notes && data.notes.length > 500) throw new Error('備考欄は500文字以内で入力してください');
+
+            // -----------------------
+
+            // Save to spreadsheet
+            var id = SheetUtils.appendReservation(data);
+
+            // --- Notifications ---
+            var eventId = null;
+            try {
+                eventId = sendAdminNotifications(data, id);
+            } catch (e) {
+                console.error('Notification Error:', e);
+                // Don't fail the request just because notification failed, but log it.
+            }
+
+            if (eventId) {
+                SheetUtils.setReservationGoogleEventId(id, eventId);
+            }
+
+            // --- LINE Notification to User ---
+            if (data.userId) {
+                try {
+                    sendLineNotification(data.userId, data);
+                } catch (e) {
+                    console.error('LINE Notification Error:', e);
+                }
+            }
+
+            var result = {
+                status: 'success',
+                message: '予約を受け付けました',
+                reservationId: id
+            };
+            output.setContent(JSON.stringify(result));
             return output;
         }
 
-        // 2. Available Slot Check (Exclusive Lock)
-        // Attempt to update the slot status. If it fails (already taken), return error.
-        if (!SheetUtils.reserveSlot(data.datetime)) {
-            throw new Error('選択された日時は既に予約が入ってしまいました。別の日時を選択してください。');
-        }
-
-        // 3. Input Validation
-        if (!data.menu || !data.datetime || !data.name || !data.phone) {
-            throw new Error('必須項目が不足しています');
-        }
-        if (data.name.length > 50) throw new Error('名前が長すぎます');
-        if (data.phone.length > 20) throw new Error('電話番号の形式が正しくありません');
-        if (data.notes && data.notes.length > 500) throw new Error('備考欄は500文字以内で入力してください');
-
-        // -----------------------
-
-        // Save to spreadsheet
-        var id = SheetUtils.appendReservation(data);
-
-        // --- Notifications ---
-        var eventId = null;
-        try {
-            eventId = sendAdminNotifications(data, id);
-        } catch (e) {
-            console.error('Notification Error:', e);
-            // Don't fail the request just because notification failed, but log it.
-        }
-
-        if (eventId) {
-            SheetUtils.setReservationGoogleEventId(id, eventId);
-        }
-
-        // --- LINE Notification to User ---
-        if (data.userId) {
-            try {
-                sendLineNotification(data.userId, data);
-            } catch (e) {
-                console.error('LINE Notification Error:', e);
-            }
-        }
-
-        var result = {
-            status: 'success',
-            message: '予約を受け付けました',
-            reservationId: id
-        };
-        output.setContent(JSON.stringify(result));
+        // --- Unknown Action ---
+        throw new Error('Unknown action: ' + action);
 
     } catch (error) {
         var errorResult = {
