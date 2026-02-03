@@ -24,7 +24,7 @@ window.onload = function () {
         });
 
     // ★ 重要: デプロイされたGASウェブアプリのURLをここに設定してください
-    const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbwZw61TyYkb8fboc8mWRZGZUpzqRWUluykk2cQ4hKXQV83RySPsprsKVL9R8Luy4AbZtw/exec';
+    const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbxhLCRh4U7ZNhL2Ig78USzz_rT_fLHOQKCm-DTHvyixnUd2gxnvqeVlAFgV6uODcNfCVw/exec';
 
     const form = document.getElementById('reservationForm');
     const loading = document.getElementById('loading');
