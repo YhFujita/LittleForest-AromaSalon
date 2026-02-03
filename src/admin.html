@@ -35,9 +35,6 @@
             text-decoration: none;
         }
 
-        /* Slot Status Indicators */
-        /* We will use events to show status, so specific CSS might be minimal */
-
         /* Modal Styles */
         .modal-slot-list {
             max-height: 50vh;
@@ -80,6 +77,14 @@
             z-index: 9999;
             justify-content: center;
             align-items: center;
+        }
+
+        /* Shift Input Styles */
+        .shift-row {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            margin-bottom: 5px;
         }
 
         /* Responsive Fixes */
@@ -224,7 +229,7 @@
                 <div class="tab-pane fade" id="settings-content" role="tabpanel">
                     <div class="card p-3 shadow-sm">
                         <h5 class="card-title mb-3">営業日時・基本設定</h5>
-                        <p class="text-muted small">標準の営業時間と休憩時間を設定します。これらは予約枠カレンダーで編集する際のデフォルト値として使用されます。</p>
+                        <p class="text-muted small">毎曜日の標準営業時間を設定します。複数の時間帯（例: 10:00-12:00, 14:00-18:00）を設定可能です。</p>
 
                         <form id="basic-settings-form">
                             <div class="mb-4 row align-items-center">
@@ -240,15 +245,12 @@
                             </div>
 
                             <div class="table-responsive">
-                                <table class="table table-bordered align-middle text-center">
+                                <table class="table table-bordered align-middle">
                                     <thead class="table-light">
                                         <tr>
-                                            <th>曜日</th>
-                                            <th style="width:100px;">状態</th>
-                                            <th>開店</th>
-                                            <th>閉店</th>
-                                            <th>休憩開始</th>
-                                            <th>休憩終了</th>
+                                            <th style="width: 60px;">曜日</th>
+                                            <th style="width: 100px;">状態</th>
+                                            <th>営業時間枠 (開始 - 終了)</th>
                                         </tr>
                                     </thead>
                                     <tbody id="basic-settings-tbody">
@@ -271,7 +273,7 @@
 
     <!-- Slot Edit Modal -->
     <div class="modal fade" id="slotEditModal" tabindex="-1" aria-hidden="true">
-        <div class="modal-dialog modal-dialog-centered modal-lg"> <!-- Large modal for better mobile view -->
+        <div class="modal-dialog modal-dialog-centered modal-lg">
             <div class="modal-content">
                 <div class="modal-header bg-light">
                     <h5 class="modal-title" id="slotEditModalLabel">予約枠設定</h5>
@@ -292,7 +294,7 @@
         </div>
     </div>
 
-    <!-- Menu Edit Modal -->
+    <!-- Menu Edit Modal ... Same as before ... -->
     <div class="modal fade" id="menuEditModal" tabindex="-1" aria-hidden="true">
         <div class="modal-dialog modal-dialog-centered">
             <div class="modal-content">
@@ -334,7 +336,7 @@
         </div>
     </div>
 
-    <!-- Reservation Edit Modal -->
+    <!-- Reservation Edit Modal ... Same as before ... -->
     <div class="modal fade" id="resEditModal" tabindex="-1" aria-hidden="true">
         <div class="modal-dialog modal-dialog-centered">
             <div class="modal-content">
@@ -381,12 +383,25 @@
             reservations: [],
             basicSettings: { weekly: [], interval: 60 },
             calendar: null,
-            currentEditDate: null, // YYYY-MM-DD
+            currentEditDate: null,
+
+            // --- Helper ---
+            // Just local DOM helper for shifts
+            addShiftRow: function (dayId, startVal = '10:00', endVal = '20:00') {
+                const container = document.getElementById(`shifts-container-${dayId}`);
+                const div = document.createElement('div');
+                div.className = 'shift-row';
+                div.innerHTML = `
+                    <input type="time" class="form-control form-control-sm shift-start" value="${startVal}">
+                    <span class="text-muted">〜</span>
+                    <input type="time" class="form-control form-control-sm shift-end" value="${endVal}">
+                    <button type="button" class="btn btn-outline-danger btn-sm" onclick="this.parentElement.remove()">×</button>
+                `;
+                container.appendChild(div);
+            },
 
             // --- Auth ---
             checkAuth: function () {
-                // Auto-login logic if session persisted? Not implemented yet.
-                // Just default to login screen.
             },
 
             login: function () {
@@ -462,7 +477,6 @@
             renderSlotCalendar: function () {
                 const calendarEl = document.getElementById('slotCalendar');
 
-                // If initializing for first time or tab switch
                 if (this.calendar) {
                     this.calendar.render();
                     return;
@@ -474,7 +488,7 @@
                     headerToolbar: {
                         left: 'prev,next today',
                         center: 'title',
-                        right: '' // Simply month view
+                        right: ''
                     },
                     height: 'auto',
                     contentHeight: 'auto',
@@ -488,7 +502,6 @@
                         this.openDaySlotModal(info.dateStr);
                     },
                     eventClick: (info) => {
-                        // Click on circle or status
                         const dateStr = info.event.startStr.split('T')[0];
                         this.openDaySlotModal(dateStr);
                     },
@@ -503,21 +516,18 @@
                 const dailySlots = {};
                 const dailyReservationCounts = {};
 
-                // Aggregate Slots
                 if (this.slots) {
                     this.slots.forEach(slot => {
-                        // "YYYY/MM/DD HH:mm"
                         const dateStr = slot.value.split(' ')[0].replace(/\//g, '-');
                         if (!dailySlots[dateStr]) dailySlots[dateStr] = 0;
                         dailySlots[dateStr]++;
                     });
                 }
 
-                // Aggregate Reservations
                 if (this.reservations) {
                     this.reservations.forEach(res => {
                         if (res.status === 'キャンセル') return;
-                        const dateStr = new Date(res.date).toISOString().split('T')[0]; // assuming date object parseable
+                        const dateStr = new Date(res.date).toISOString().split('T')[0];
                         if (!dailyReservationCounts[dateStr]) dailyReservationCounts[dateStr] = 0;
                         dailyReservationCounts[dateStr]++;
                     });
@@ -530,7 +540,6 @@
                     const count = dailySlots[date] || 0;
                     const resCount = dailyReservationCounts[date] || 0;
 
-                    // Available Status
                     if (count > 0) {
                         events.push({
                             title: '○',
@@ -540,21 +549,17 @@
                             borderColor: 'transparent',
                             classNames: ['fs-4', 'fw-bold', 'text-center']
                         });
-                        // Optional: Show count
-                        // events.push({ title: count + '枠', start: date, display:'background' });
                     } else if (resCount > 0 && count === 0) {
-                        // Full? Or just no open slots but has reservations
                         events.push({
                             title: '満',
                             start: date,
-                            textColor: '#dc3545', // Red
+                            textColor: '#dc3545',
                             backgroundColor: 'transparent',
                             borderColor: 'transparent',
                             classNames: ['fs-4', 'fw-bold', 'text-center']
                         });
                     }
 
-                    // Reservation Count Badge
                     if (resCount > 0) {
                         events.push({
                             title: resCount + '件予約',
@@ -586,51 +591,43 @@
                 const interval = parseInt(this.basicSettings.interval) || 60;
 
                 let candidates = [];
-                // Default fallback if no settings
-                let startT = "10:00", endT = "20:00", bStart = "", bEnd = "";
                 let isClosed = false;
 
                 if (settings) {
-                    startT = settings.startTime || "10:00";
-                    endT = settings.endTime || "20:00";
-                    bStart = settings.breakStart;
-                    bEnd = settings.breakEnd;
                     if (settings.status === '休業') isClosed = true;
+                    if (!isClosed && settings.shifts && settings.shifts.length > 0) {
+                        const toMin = (s) => parseInt(s.split(':')[0]) * 60 + parseInt(s.split(':')[1]);
+                        const toTime = (m) => ('0' + Math.floor(m / 60)).slice(-2) + ':' + ('0' + (m % 60)).slice(-2);
+
+                        settings.shifts.forEach(shift => {
+                            if (!shift.start || !shift.end) return;
+                            let cur = toMin(shift.start);
+                            let end = toMin(shift.end);
+
+                            while (cur < end) {
+                                candidates.push(toTime(cur));
+                                cur += interval;
+                            }
+                        });
+                    }
+                } else if (!isClosed) {
+                    // Fallback default
+                    let cur = 600; // 10:00
+                    let end = 1200; // 20:00
+                    while (cur < end) {
+                        candidates.push(('0' + Math.floor(cur / 60)).slice(-2) + ':' + ('0' + (cur % 60)).slice(-2));
+                        cur += interval;
+                    }
                 }
+
+                // Unique & Sort
+                candidates = [...new Set(candidates)].sort();
 
                 if (isClosed && (!this.slots || !this.slots.some(s => s.value.startsWith(dateStr.replace(/-/g, '/'))))) {
-                    // Closed and no current slots -> Show Closed Message but allow manual add?
-                    // For now, let's generate standard slots but unchecked.
-                }
-
-                // Generate time series
-                const toMin = (s) => parseInt(s.split(':')[0]) * 60 + parseInt(s.split(':')[1]);
-                const toTime = (m) => ('0' + Math.floor(m / 60)).slice(-2) + ':' + ('0' + (m % 60)).slice(-2);
-
-                let cur = toMin(startT);
-                let end = toMin(endT);
-                let bS = bStart ? toMin(bStart) : -1;
-                let bE = bEnd ? toMin(bEnd) : -1;
-
-                // Safety loop
-                let safety = 0;
-                while (cur < end && safety < 100) {
-                    safety++;
-                    // Skip break
-                    if (bS !== -1 && bE !== -1) {
-                        // If time is within break
-                        if (cur >= bS && cur < bE) {
-                            cur += interval;
-                            continue;
-                        }
-                    }
-
-                    candidates.push(toTime(cur));
-                    cur += interval;
+                    // Empty candidates
                 }
 
                 // 2. Identify Status
-                // "YYYY/MM/DD HH:mm"
                 const activeTimes = [];
                 const prefix = dateStr.replace(/-/g, '/') + ' ';
                 this.slots.forEach(s => {
@@ -645,18 +642,14 @@
                     const rd = new Date(r.date);
                     const rDateStr = rd.toISOString().split('T')[0];
                     if (rDateStr === dateStr) {
-                        // Extract HH:mm
-                        reservedTimes.push(toTime(rd.getHours() * 60 + rd.getMinutes()));
+                        reservedTimes.push(('0' + rd.getHours()).slice(-2) + ':' + ('0' + rd.getMinutes()).slice(-2));
                     }
                 });
 
-                // Merge: 
-                // Ensure all existing slots (even manually added ones not in candidates) are shown?
-                // For simplicity, we stick to candidates + any active slots not in candidates
                 activeTimes.forEach(t => {
                     if (!candidates.includes(t)) candidates.push(t);
                 });
-                candidates.sort(); // Sort times
+                candidates.sort(); // Sort times again after merging
 
                 if (candidates.length === 0) {
                     container.innerHTML = '<div class="text-center text-muted p-3">設定可能な枠がありません（休業日または時間外）</div>';
@@ -664,7 +657,6 @@
 
                 candidates.forEach(time => {
                     const isActive = activeTimes.includes(time);
-                    // Reserved check: Fuzzy match. If a reservation starts at this time.
                     const isReserved = reservedTimes.includes(time);
 
                     const div = document.createElement('div');
@@ -738,25 +730,41 @@
                 document.getElementById('setting-interval').value = this.basicSettings.interval || 60;
 
                 const days = this.basicSettings.weekly || [];
-                // If empty, generate default structure logic already handled in backend, 
-                // but if waiting for fetch, might be empty.
 
                 days.forEach(d => {
                     const tr = document.createElement('tr');
                     tr.dataset.dayId = d.dayId;
 
+                    // Status
+                    let statusHtml = `
+                        <select class="form-select form-select-sm status-select">
+                            <option value="営業" ${d.status === '営業' ? 'selected' : ''}>営業</option>
+                            <option value="休業" ${d.status === '休業' ? 'selected' : ''}>休業</option>
+                        </select>
+                    `;
+
+                    // Shifts
+                    let shiftsHtml = `<div id="shifts-container-${d.dayId}">`;
+                    if (d.shifts && d.shifts.length > 0) {
+                        d.shifts.forEach(s => {
+                            shiftsHtml += `
+                                <div class="shift-row">
+                                    <input type="time" class="form-control form-control-sm shift-start" value="${s.start}">
+                                    <span class="text-muted">〜</span>
+                                    <input type="time" class="form-control form-control-sm shift-end" value="${s.end}">
+                                    <button type="button" class="btn btn-outline-danger btn-sm" onclick="this.parentElement.remove()">×</button>
+                                </div>
+                            `;
+                        });
+                    }
+                    shiftsHtml += `</div>
+                        <button type="button" class="btn btn-sm btn-outline-success mt-1" onclick="app.addShiftRow(${d.dayId})">＋ 時間枠追加</button>
+                    `;
+
                     tr.innerHTML = `
-                        <td class="fw-bold text-bg-light">${d.dayName}</td>
-                        <td>
-                            <select class="form-select form-select-sm status-select">
-                                <option value="営業" ${d.status === '営業' ? 'selected' : ''}>営業</option>
-                                <option value="休業" ${d.status === '休業' ? 'selected' : ''}>休業</option>
-                            </select>
-                        </td>
-                        <td><input type="time" class="form-control form-control-sm start-time" value="${d.startTime}"></td>
-                        <td><input type="time" class="form-control form-control-sm end-time" value="${d.endTime}"></td>
-                        <td><input type="time" class="form-control form-control-sm break-start" value="${d.breakStart}"></td>
-                        <td><input type="time" class="form-control form-control-sm break-end" value="${d.breakEnd}"></td>
+                        <td class="fw-bold text-bg-light text-center">${d.dayName}</td>
+                        <td>${statusHtml}</td>
+                        <td>${shiftsHtml}</td>
                     `;
                     tbody.appendChild(tr);
                 });
@@ -765,14 +773,22 @@
             saveBasicSettings: function () {
                 const rows = document.querySelectorAll('#basic-settings-tbody tr');
                 const weekly = Array.from(rows).map(row => {
+                    const status = row.querySelector('.status-select').value;
+                    const shiftDivs = row.querySelectorAll('.shift-row');
+                    const shifts = [];
+                    shiftDivs.forEach(div => {
+                        const start = div.querySelector('.shift-start').value;
+                        const end = div.querySelector('.shift-end').value;
+                        if (start && end) {
+                            shifts.push({ start: start, end: end });
+                        }
+                    });
+
                     return {
                         dayId: row.dataset.dayId,
                         dayName: row.cells[0].textContent,
-                        status: row.querySelector('.status-select').value,
-                        startTime: row.querySelector('.start-time').value,
-                        endTime: row.querySelector('.end-time').value,
-                        breakStart: row.querySelector('.break-start').value,
-                        breakEnd: row.querySelector('.break-end').value
+                        status: status,
+                        shifts: shifts
                     };
                 });
 
@@ -791,7 +807,6 @@
                         this.showLoading(false);
                         if (data.status === 'success') {
                             this.showToast('基本設定を保存しました');
-                            // Force refresh to update calendar view immediately if needed
                             this.fetchAdminData();
                         } else {
                             alert('Error: ' + data.message);
@@ -799,7 +814,7 @@
                     });
             },
 
-            // --- Menu Logic (Legacy Port) ---
+            // --- Menu Logic (Reuse) ---
             renderMenuSettings: function () {
                 const list = document.getElementById('menu-list');
                 list.innerHTML = '';
@@ -832,7 +847,6 @@
             },
 
             showMenuModal: function () {
-                // Reset form
                 document.getElementById('menuId').value = '';
                 document.getElementById('menuName').value = '';
                 document.getElementById('menuPrice').value = '';
@@ -840,7 +854,6 @@
                 document.getElementById('menuSection').value = '';
                 document.getElementById('menuDesc').value = '';
                 document.getElementById('menuEditModalTitle').textContent = '新規メニュー追加';
-
                 new bootstrap.Modal(document.getElementById('menuEditModal')).show();
             },
 
@@ -853,7 +866,6 @@
                 document.getElementById('menuDesc').value = item.description || '';
                 document.getElementById('menuOrder').value = item.order;
                 document.getElementById('menuEditModalTitle').textContent = 'メニュー編集';
-
                 new bootstrap.Modal(document.getElementById('menuEditModal')).show();
             },
 
@@ -901,7 +913,7 @@
                 this.menu[idx] = this.menu[newIdx];
                 this.menu[newIdx] = temp;
 
-                this.renderMenuSettings(); // Optimistic
+                this.renderMenuSettings();
 
                 const ids = this.menu.map(x => x.id);
                 fetch(GAS_URL, {
@@ -921,11 +933,9 @@
                     document.getElementById('no-reservations-msg').classList.add('d-none');
                     this.reservations.forEach(res => {
                         const tr = document.createElement('tr');
-
                         const menu = this.menu.find(m => m.id === res.menuId);
                         const menuName = menu ? menu.name : res.menuId;
                         const isCancel = res.status === 'キャンセル';
-
                         if (isCancel) tr.classList.add('table-secondary', 'text-muted');
 
                         tr.innerHTML = `
@@ -975,7 +985,7 @@
 
                 if (!d || !t) return alert('日時を指定してください');
 
-                const datetime = d + ' ' + t; // "YYYY-MM-DD HH:mm"
+                const datetime = d + ' ' + t;
 
                 if (!confirm('変更しますか？')) return;
 
@@ -1034,10 +1044,8 @@
             }
         };
 
-        // Init
         window.addEventListener('DOMContentLoaded', () => {
-            // Check auth logic / Init
-            // app.login() or show login
+            // Init
         });
     </script>
 </body>

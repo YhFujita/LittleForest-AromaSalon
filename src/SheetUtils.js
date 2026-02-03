@@ -11,6 +11,15 @@ var SheetUtils = (function () {
     var CACHE_KEY_SLOTS = 'SLOTS_CACHE';
     var CACHE_KEY_BASIC_SETTINGS = 'BASIC_SETTINGS_CACHE';
 
+    // Helper to extract HH:mm from Date or String
+    function fmtTime(val) {
+        if (!val) return '';
+        if (val instanceof Date) {
+            return Utilities.formatDate(val, Session.getScriptTimeZone(), 'HH:mm');
+        }
+        return String(val);
+    }
+
     function getSheet(name) {
         var id = PropertiesService.getScriptProperties().getProperty('SPREADSHEET_ID');
         if (id) id = id.trim();
@@ -59,16 +68,16 @@ var SheetUtils = (function () {
                 sheet.appendRow(['LINE_MESSAGE_TEMPLATE', defaultTemplate]);
                 sheet.appendRow(['SLOT_INTERVAL', '60']); // Default interval
             } else if (name === SHEET_NAME_BASIC_SETTINGS) {
-                // 曜日ごとの設定 (0:日, 1:月, ... 6:土)
-                sheet.appendRow(['曜日ID', '曜日名', '営業ステータス', '開始時間', '終了時間', '休憩開始', '休憩終了']);
+                // 新しい構造: [曜日ID, 曜日名, 営業ステータス, シフト設定]
+                // シフト設定: "10:00-13:00,14:00-18:00" のようなカンマ区切り文字列
+                sheet.appendRow(['曜日ID', '曜日名', '営業ステータス', 'シフト設定']);
                 var days = ['日', '月', '火', '水', '木', '金', '土'];
                 for (var i = 0; i < 7; i++) {
-                    // Default: 10:00 - 20:00, Closed on Sunday(0) maybe? Let's default to Open all for now
-                    sheet.appendRow([i, days[i], '営業', '10:00', '20:00', '', '']);
+                    sheet.appendRow([i, days[i], '営業', '10:00-20:00']);
                 }
             }
         } else if (name === SHEET_NAME_RESERVATIONS) {
-            // ... (Existing migration logic) ...
+            // ... (Existing reservation migration logic) ...
             var header = sheet.getRange(1, 1, 1, 10).getValues()[0];
             if (header[4] === '金額') {
                 sheet.insertColumnsAfter(4, 3);
@@ -77,6 +86,45 @@ var SheetUtils = (function () {
                 sheet.getRange(1, 6).setValue('税抜金額');
                 sheet.getRange(1, 7).setValue('消費税');
                 sheet.getRange(1, 8).setValue('金額(税込)');
+            }
+        } else if (name === SHEET_NAME_BASIC_SETTINGS) {
+            // Migration: Convert old 7-column format to new 4-column format
+            // Old: [ID, Name, Status, Start, End, BreakStart, BreakEnd]
+            // New: [ID, Name, Status, Shifts]
+            var lastCol = sheet.getLastColumn();
+            if (lastCol >= 7) {
+                var data = sheet.getDataRange().getValues();
+                var header = data[0];
+                // Check if index 3 is '開始時間' (Old)
+                if (header[3] === '開始時間') {
+                    var newData = [];
+                    newData.push(['曜日ID', '曜日名', '営業ステータス', 'シフト設定']);
+
+                    for (var i = 1; i < data.length; i++) {
+                        var row = data[i];
+                        var status = row[2];
+                        if (status !== '営業' && status !== '休業') status = '営業';
+
+                        var shifts = [];
+                        if (status === '営業') {
+                            var start = row[3] ? fmtTime(row[3]) : '10:00';
+                            var end = row[4] ? fmtTime(row[4]) : '20:00';
+                            var bStart = row[5] ? fmtTime(row[5]) : '';
+                            var bEnd = row[6] ? fmtTime(row[6]) : '';
+
+                            if (bStart && bEnd) {
+                                shifts.push(start + '-' + bStart);
+                                shifts.push(bEnd + '-' + end);
+                            } else {
+                                shifts.push(start + '-' + end);
+                            }
+                        }
+                        newData.push([row[0], row[1], status, shifts.join(',')]);
+                    }
+
+                    sheet.clear();
+                    sheet.getRange(1, 1, newData.length, 4).setValues(newData);
+                }
             }
         }
         return sheet;
@@ -128,37 +176,27 @@ var SheetUtils = (function () {
             data.shift(); // Remove header
 
             var settings = data.map(function (row) {
+                // row: [0:ID, 1:Name, 2:Status, 3:Shifts]
+                var shiftStr = String(row[3] || '');
+                var shifts = [];
+                if (shiftStr) {
+                    var parts = shiftStr.split(',');
+                    parts.forEach(function (p) {
+                        var times = p.split('-');
+                        if (times.length === 2) {
+                            shifts.push({
+                                start: times[0].trim(),
+                                end: times[1].trim()
+                            });
+                        }
+                    });
+                }
+
                 return {
                     dayId: row[0],
                     dayName: row[1],
                     status: row[2], // '営業' or '休業'
-                    startTime: row[3] ? Utilities.formatDate(new Date('1970/01/01 ' + row[3]), Session.getScriptTimeZone(), 'HH:mm') : '',
-                    endTime: row[4] ? Utilities.formatDate(new Date('1970/01/01 ' + row[4]), Session.getScriptTimeZone(), 'HH:mm') : '',
-                    breakStart: row[5] ? Utilities.formatDate(new Date('1970/01/01 ' + row[5]), Session.getScriptTimeZone(), 'HH:mm') : '',
-                    breakEnd: row[6] ? Utilities.formatDate(new Date('1970/01/01 ' + row[6]), Session.getScriptTimeZone(), 'HH:mm') : ''
-                };
-            });
-
-            // Handle pure time strings that might not parse with new Date('1970...') if cell is strictly text '10:00'
-            // The above simple parse often works in GAS if cell is formatted as time or string. 
-            // Better robust way: check if row[3] is Date object or string.
-            // But let's refine map a bit to be safe.
-            settings = data.map(function (row) {
-                var formatTime = function (val) {
-                    if (!val) return '';
-                    if (val instanceof Date) {
-                        return Utilities.formatDate(val, Session.getScriptTimeZone(), 'HH:mm');
-                    }
-                    return String(val); // Assume "HH:mm" string
-                };
-                return {
-                    dayId: row[0],
-                    dayName: row[1],
-                    status: row[2],
-                    startTime: formatTime(row[3]),
-                    endTime: formatTime(row[4]),
-                    breakStart: formatTime(row[5]),
-                    breakEnd: formatTime(row[6])
+                    shifts: shifts
                 };
             });
 
@@ -183,25 +221,32 @@ var SheetUtils = (function () {
         },
 
         saveBasicSettings: function (settings) {
-            // settings: { weekly: [...], interval: 60 }
+            // settings: { weekly: [{dayId, dayName, status, shifts:[{start,end},...]}], interval: 60 }
             var sheet = getSheet(SHEET_NAME_BASIC_SETTINGS);
-            // Update weekly
-            // Assuming settings.weekly is array of 7 items sorted by dayId
+
+            // Prepare data
             var weeklyData = settings.weekly.map(function (item) {
+                var shiftStrs = [];
+                if (item.shifts && Array.isArray(item.shifts)) {
+                    item.shifts.forEach(function (s) {
+                        if (s.start && s.end) {
+                            shiftStrs.push(s.start + '-' + s.end);
+                        }
+                    });
+                }
                 return [
                     item.dayId,
                     item.dayName,
                     item.status,
-                    item.startTime,
-                    item.endTime,
-                    item.breakStart,
-                    item.breakEnd
+                    shiftStrs.join(',')
                 ];
             });
 
             // Overwrite from row 2
             if (weeklyData.length > 0) {
-                sheet.getRange(2, 1, weeklyData.length, 7).setValues(weeklyData);
+                // Clear previous content to ensure no leftover columns if any
+                sheet.getRange(2, 1, sheet.getLastRow(), sheet.getLastColumn()).clearContent();
+                sheet.getRange(2, 1, weeklyData.length, 4).setValues(weeklyData);
             }
 
             // Update Interval
