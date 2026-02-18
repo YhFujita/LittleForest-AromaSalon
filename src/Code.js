@@ -54,6 +54,16 @@ function doPost(e) {
             return output;
         }
 
+        if (action === 'reset_basic_settings') {
+            try {
+                var settings = SheetUtils.resetBasicSettings();
+                output.setContent(JSON.stringify({ status: 'success', basicSettings: settings }));
+            } catch (e) {
+                output.setContent(JSON.stringify({ status: 'error', message: e.toString() }));
+            }
+            return output;
+        }
+
         if (action === 'update_slot_status') {
             if (SheetUtils.updateSlotStatus(data.datetime, data.status)) {
                 output.setContent(JSON.stringify({ status: 'success' }));
@@ -64,7 +74,8 @@ function doPost(e) {
         }
 
         if (action === 'update_slot_datetime') {
-            var result = SheetUtils.updateSlotDatetime(data.currentDatetime, new Date(data.newDatetime));
+            var parsedNewDatetime = SheetUtils.parseDatetime(data.newDatetime);
+            var result = SheetUtils.updateSlotDatetime(data.currentDatetime, parsedNewDatetime);
             if (result.success) {
                 output.setContent(JSON.stringify({ status: 'success' }));
             } else {
@@ -421,7 +432,10 @@ function sendAdminNotifications(data, reservationId) {
     var menuName = selectedMenu ? selectedMenu.name : '不明なメニュー';
     var duration = selectedMenu ? parseInt(selectedMenu.duration, 10) : 60; // Default 60 min
 
-    var startTime = new Date(data.datetime);
+    var startTime = SheetUtils.parseDatetime(data.datetime);
+    if (!startTime || isNaN(startTime.getTime())) {
+        throw new Error('日時の形式が正しくありません: ' + data.datetime);
+    }
     var endTime = new Date(startTime.getTime() + duration * 60000);
 
     // 2. Send Email (if ADMIN_EMAIL is set)
@@ -490,7 +504,11 @@ function sendLineNotification(userId, data) {
     var menuName = selectedMenu ? selectedMenu.name : '不明なメニュー (ID: ' + data.menu + ')';
 
     // Format Date
-    var d = new Date(data.datetime);
+    var d = SheetUtils.parseDatetime(data.datetime);
+    if (!d || isNaN(d.getTime())) {
+        console.error('Invalid datetime for LINE notification: ' + data.datetime);
+        return;
+    }
     var dateStr = Utilities.formatDate(d, Session.getScriptTimeZone(), 'M月d日(E) HH:mm');
     // Japanese day of week manual map if locale not reliable, but 'E' usually works
     // Let's force Japanese day of week to be safe

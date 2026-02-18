@@ -20,6 +20,57 @@ var SheetUtils = (function () {
         return String(val);
     }
 
+    function pad2(n) {
+        return ('0' + n).slice(-2);
+    }
+
+    function normalizeDatetimeString(val) {
+        if (!val && val !== 0) return null;
+
+        if (val instanceof Date) {
+            if (isNaN(val.getTime())) return null;
+            return Utilities.formatDate(val, Session.getScriptTimeZone(), 'yyyy/MM/dd HH:mm');
+        }
+
+        var s = String(val).trim();
+
+        // yyyy/MM/dd HH:mm or yyyy-MM-dd HH:mm (+ optional seconds)
+        var m1 = s.match(/^(\d{4})[-\/](\d{1,2})[-\/](\d{1,2})\s+(\d{1,2}):(\d{2})(?::\d{2})?$/);
+        if (m1) {
+            return m1[1] + '/' + pad2(parseInt(m1[2], 10)) + '/' + pad2(parseInt(m1[3], 10)) + ' ' + pad2(parseInt(m1[4], 10)) + ':' + m1[5];
+        }
+
+        // Japanese format: yyyy年M月d日(...) HH:mm
+        var m2 = s.match(/(\d{4})年(\d{1,2})月(\d{1,2})日.*?(\d{1,2}):(\d{2})/);
+        if (m2) {
+            return m2[1] + '/' + pad2(parseInt(m2[2], 10)) + '/' + pad2(parseInt(m2[3], 10)) + ' ' + pad2(parseInt(m2[4], 10)) + ':' + m2[5];
+        }
+
+        return null;
+    }
+
+    function ensureBasicSettingsHeader(sheet) {
+        var header = ['曜日ID', '曜日名', '営業ステータス', 'シフト設定'];
+        var hasRows = sheet.getLastRow() >= 1;
+        var firstRow = hasRows ? sheet.getRange(1, 1, 1, 4).getValues()[0] : ['', '', '', ''];
+        var isHeader =
+            firstRow[0] === header[0] &&
+            firstRow[1] === header[1] &&
+            firstRow[2] === header[2] &&
+            firstRow[3] === header[3];
+
+        if (isHeader) return;
+
+        if (!hasRows) {
+            sheet.getRange(1, 1, 1, 4).setValues([header]);
+            return;
+        }
+
+        // Keep existing data rows: insert a new header row if current first row is not header.
+        sheet.insertRowBefore(1);
+        sheet.getRange(1, 1, 1, 4).setValues([header]);
+    }
+
     function getSheet(name) {
         var id = PropertiesService.getScriptProperties().getProperty('SPREADSHEET_ID');
         if (id) id = id.trim();
@@ -144,6 +195,26 @@ var SheetUtils = (function () {
 
     function parseDatetimeString(datetimeStr) {
         if (!datetimeStr) return null;
+
+        if (datetimeStr instanceof Date) {
+            if (isNaN(datetimeStr.getTime())) return null;
+            return new Date(datetimeStr.getTime());
+        }
+
+        var normalizedText = normalizeDatetimeString(datetimeStr);
+        if (normalizedText) {
+            var m = normalizedText.match(/^(\d{4})\/(\d{2})\/(\d{2})\s+(\d{2}):(\d{2})$/);
+            if (m) {
+                return new Date(
+                    parseInt(m[1], 10),
+                    parseInt(m[2], 10) - 1,
+                    parseInt(m[3], 10),
+                    parseInt(m[4], 10),
+                    parseInt(m[5], 10)
+                );
+            }
+        }
+
         var s = String(datetimeStr);
         // YYYY-MM-DD HH:mm
         var normalized = s.replace(/\//g, '-');
@@ -171,25 +242,54 @@ var SheetUtils = (function () {
             );
         }
 
-        var d = new Date(datetimeStr);
-        if (!isNaN(d.getTime())) return d;
         return null;
     }
 
     return {
         // ... (Existing functions: appendReservation, getMenuItems, updateMenuCache, getAvailableSlots, updateSlotsCache, reserveSlot, addSlots) ...
+        parseDatetime: function (val) {
+            return parseDatetimeString(val);
+        },
 
         getBasicSettings: function () {
             var scriptProperties = PropertiesService.getScriptProperties();
             var cached = scriptProperties.getProperty(CACHE_KEY_BASIC_SETTINGS);
-            if (cached) return JSON.parse(cached);
+            if (cached) {
+                var settings = JSON.parse(cached);
+                // If cache exists but is invalid (e.g. empty weekly array), force refresh
+                if (settings && settings.weekly && settings.weekly.length >= 7) {
+                    return settings;
+                }
+            }
             return this.updateBasicSettingsCache();
         },
 
         updateBasicSettingsCache: function () {
             var sheet = getSheet(SHEET_NAME_BASIC_SETTINGS);
+            ensureBasicSettingsHeader(sheet);
             var data = sheet.getDataRange().getValues();
             data.shift(); // Remove header
+
+            // Check if we have 7 days of data
+            // If data is empty or less than 7 rows, re-initialize with defaults
+            if (data.length < 7) {
+                console.warn('Basic Settings data incomplete. Re-initializing...');
+                var days = ['日', '月', '火', '水', '木', '金', '土'];
+                var newData = [];
+                for (var i = 0; i < 7; i++) {
+                    // ID, Name, Status, Shifts
+                    newData.push([i, days[i], '営業', '10:00-20:00']);
+                }
+
+                // Clear existing and set new data
+                if (sheet.getLastRow() > 1) {
+                    sheet.getRange(2, 1, sheet.getLastRow() - 1, 4).clearContent();
+                }
+                sheet.getRange(2, 1, newData.length, 4).setValues(newData);
+
+                // Refresh local data variable
+                data = newData;
+            }
 
             var settings = data.map(function (row) {
                 // row: [0:ID, 1:Name, 2:Status, 3:Shifts]
@@ -236,12 +336,24 @@ var SheetUtils = (function () {
             return result;
         },
 
+        resetBasicSettings: function () {
+            var sheet = getSheet(SHEET_NAME_BASIC_SETTINGS);
+            if (sheet.getLastRow() > 1) {
+                sheet.getRange(2, 1, sheet.getLastRow() - 1, 4).clearContent();
+            }
+            // Just clearing calls updateBasicSettingsCache to re-init
+            PropertiesService.getScriptProperties().deleteProperty(CACHE_KEY_BASIC_SETTINGS);
+            return this.updateBasicSettingsCache();
+        },
+
         saveBasicSettings: function (settings) {
             // settings: { weekly: [{dayId, dayName, status, shifts:[{start,end},...]}], interval: 60 }
             var sheet = getSheet(SHEET_NAME_BASIC_SETTINGS);
+            ensureBasicSettingsHeader(sheet);
+            var weekly = (settings && Array.isArray(settings.weekly)) ? settings.weekly : [];
 
             // Prepare data
-            var weeklyData = settings.weekly.map(function (item) {
+            var weeklyData = weekly.map(function (item) {
                 var shiftStrs = [];
                 if (item.shifts && Array.isArray(item.shifts)) {
                     item.shifts.forEach(function (s) {
@@ -261,7 +373,10 @@ var SheetUtils = (function () {
             // Overwrite from row 2
             if (weeklyData.length > 0) {
                 // Clear previous content to ensure no leftover columns if any
-                sheet.getRange(2, 1, sheet.getLastRow(), sheet.getLastColumn()).clearContent();
+                var rowsToClear = Math.max(sheet.getLastRow() - 1, 0);
+                if (rowsToClear > 0) {
+                    sheet.getRange(2, 1, rowsToClear, sheet.getLastColumn()).clearContent();
+                }
                 sheet.getRange(2, 1, weeklyData.length, 4).setValues(weeklyData);
             }
 
@@ -293,8 +408,8 @@ var SheetUtils = (function () {
             // 1. Identify rows to delete (Open slots on that day)
             // We iterate backwards to delete safely
             for (var i = data.length - 1; i >= 1; i--) {
-                var rowDate = new Date(data[i][0]);
-                if (isNaN(rowDate.getTime())) continue;
+                var rowDate = parseDatetimeString(data[i][0]);
+                if (!rowDate || isNaN(rowDate.getTime())) continue;
                 var rowDateStr = Utilities.formatDate(rowDate, timeZone, 'yyyy-MM-dd');
 
                 if (rowDateStr === targetDateStr) {
@@ -313,8 +428,8 @@ var SheetUtils = (function () {
                 var currentData = sheet.getDataRange().getValues();
                 var existingTimeSet = {};
                 for (var i = 1; i < currentData.length; i++) {
-                    var d = new Date(currentData[i][0]);
-                    if (!isNaN(d.getTime())) {
+                    var d = parseDatetimeString(currentData[i][0]);
+                    if (d && !isNaN(d.getTime())) {
                         var tStr = Utilities.formatDate(d, timeZone, 'yyyy/MM/dd HH:mm');
                         existingTimeSet[tStr] = true;
                     }
@@ -323,7 +438,8 @@ var SheetUtils = (function () {
                 var rowsToAdd = [];
                 activeSlots.forEach(function (slotStr) {
                     // slotStr should be formatted as needed, assuming input is parseable
-                    var sDate = new Date(slotStr);
+                    var sDate = parseDatetimeString(slotStr);
+                    if (!sDate || isNaN(sDate.getTime())) return;
                     var sDateStr = Utilities.formatDate(sDate, timeZone, 'yyyy/MM/dd HH:mm');
 
                     if (!existingTimeSet[sDateStr]) {
@@ -355,7 +471,10 @@ var SheetUtils = (function () {
             var id = Utilities.getUuid();
             var timestamp = new Date();
             var formattedTimestamp = formatDateJP(timestamp);
-            var bookingDate = new Date(data.datetime);
+            var bookingDate = parseDatetimeString(data.datetime);
+            if (!bookingDate || isNaN(bookingDate.getTime())) {
+                throw new Error('日時の形式が正しくありません: ' + data.datetime);
+            }
             var formattedBookingDate = formatDateJP(bookingDate);
 
             // Lookup Price & Menu Name
@@ -503,8 +622,8 @@ var SheetUtils = (function () {
 
             var rowsToAdd = [];
             slots.forEach(function (slot) {
-                var date = new Date(slot);
-                if (!isNaN(date.getTime()) && !existingTimes[date.getTime()]) {
+                var date = parseDatetimeString(slot);
+                if (date && !isNaN(date.getTime()) && !existingTimes[date.getTime()]) {
                     rowsToAdd.push([date, '空き']);
                 }
             });
@@ -568,6 +687,9 @@ var SheetUtils = (function () {
             var sheet = getSheet(SHEET_NAME_SLOTS);
             var data = sheet.getDataRange().getValues();
             var timeZone = Session.getScriptTimeZone();
+            if (!newDateObj || isNaN(newDateObj.getTime())) {
+                return { success: false, message: '日時の形式が正しくありません' };
+            }
             var newDateStr = Utilities.formatDate(newDateObj, timeZone, 'yyyy/MM/dd HH:mm');
 
             for (var i = 1; i < data.length; i++) {
@@ -662,14 +784,12 @@ var SheetUtils = (function () {
         getReservations: function () {
             var sheet = getSheet(SHEET_NAME_RESERVATIONS);
             var data = sheet.getDataRange().getValues();
-            var timeZone = Session.getScriptTimeZone();
             var results = [];
 
             for (var i = 1; i < data.length; i++) {
                 var row = data[i];
-                var d = parseDatetimeString(row[0]);
-
-                if (!d || isNaN(d.getTime())) continue;
+                var normalized = normalizeDatetimeString(row[0]);
+                if (!normalized) continue;
 
                 // Columns: 
                 // 0:Date, 1:ID, 2:Name, 3:MenuID, 4:MenuName, 5:Excl, 6:Tax, 7:Incl, 8:Time, 9:Phone, 10:Notes, 11:Status, 12:EventID
@@ -678,7 +798,7 @@ var SheetUtils = (function () {
                 // data = getValues() はシート全体のデータを取るので、行によって列数が違うことはない(空白になる)
 
                 results.push({
-                    date: Utilities.formatDate(d, timeZone, 'yyyy/MM/dd HH:mm'),
+                    date: normalized,
                     displayDate: row[0],
                     id: row[1],
                     name: row[2],

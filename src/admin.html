@@ -35,6 +35,25 @@
             text-decoration: none;
         }
 
+        .fc .slot-line {
+            font-size: 0.78rem;
+            line-height: 1.2;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        /* In slot calendar we render custom label text ourselves. */
+        #slotCalendar .fc-event-time {
+            display: none !important;
+        }
+
+        #slotCalendar .fc-daygrid-event .fc-event-title {
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
         /* Modal Styles */
         .modal-slot-list {
             max-height: 50vh;
@@ -228,7 +247,11 @@
                 <!-- Basic Settings -->
                 <div class="tab-pane fade" id="settings-content" role="tabpanel">
                     <div class="card p-3 shadow-sm">
-                        <h5 class="card-title mb-3">営業日時・基本設定</h5>
+                        <div class="d-flex justify-content-between align-items-center mb-3">
+                            <h5 class="card-title mb-0">営業日時・基本設定</h5>
+                            <button type="button" class="btn btn-outline-secondary btn-sm"
+                                onclick="app.resetBasicSettings()">初期設定に戻す</button>
+                        </div>
                         <p class="text-muted small">毎曜日の標準営業時間を設定します。複数の時間帯（例: 10:00-12:00, 14:00-18:00）を設定可能です。</p>
 
                         <form id="basic-settings-form">
@@ -374,7 +397,8 @@
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 
     <script>
-        const GAS_URL = 'https://script.google.com/macros/s/AKfycbwZw61TyYkb8fboc8mWRZGZUpzqRWUluykk2cQ4hKXQV83RySPsprsKVL9R8Luy4AbZtw/exec';
+        // Updated to Production/Stable URL (Version 58)
+        const GAS_URL = 'https://script.google.com/macros/s/AKfycbz_RcJV25LWJjP-rF6A_u9MRIg09DGSeBrgV7cE8_S-UsDU6VX89VUHQgfmAwKAOn4c/exec';
 
         const app = {
             token: null,
@@ -384,6 +408,15 @@
             basicSettings: { weekly: [], interval: 60 },
             calendar: null,
             currentEditDate: null,
+            defaultWeekdays: [
+                { dayId: 0, dayName: '日' },
+                { dayId: 1, dayName: '月' },
+                { dayId: 2, dayName: '火' },
+                { dayId: 3, dayName: '水' },
+                { dayId: 4, dayName: '木' },
+                { dayId: 5, dayName: '金' },
+                { dayId: 6, dayName: '土' }
+            ],
 
             // --- Helper ---
             // Just local DOM helper for shifts
@@ -398,6 +431,69 @@
                     <button type="button" class="btn btn-outline-danger btn-sm" onclick="this.parentElement.remove()">×</button>
                 `;
                 container.appendChild(div);
+            },
+
+            pad2: function (n) {
+                return ('0' + n).slice(-2);
+            },
+
+            parseYmdToLocalDate: function (ymd) {
+                const m = String(ymd || '').match(/^(\d{4})[-\/](\d{1,2})[-\/](\d{1,2})$/);
+                if (!m) return null;
+                return new Date(parseInt(m[1], 10), parseInt(m[2], 10) - 1, parseInt(m[3], 10));
+            },
+
+            splitDateTime: function (val) {
+                const s = String(val || '').trim();
+                const m = s.match(/^(\d{4})[-\/](\d{1,2})[-\/](\d{1,2})\s+(\d{1,2}):(\d{2})$/);
+                if (!m) return null;
+                const dateKey = `${m[1]}-${this.pad2(parseInt(m[2], 10))}-${this.pad2(parseInt(m[3], 10))}`;
+                const timeKey = `${this.pad2(parseInt(m[4], 10))}:${this.pad2(parseInt(m[5], 10))}`;
+                return { dateKey: dateKey, timeKey: timeKey };
+            },
+
+            toDateKeyFromDate: function (d) {
+                return `${d.getFullYear()}-${this.pad2(d.getMonth() + 1)}-${this.pad2(d.getDate())}`;
+            },
+
+            normalizeBasicSettings: function (rawSettings) {
+                const src = rawSettings || {};
+                const interval = parseInt(src.interval, 10) || 60;
+                const weeklySource = Array.isArray(src.weekly)
+                    ? src.weekly
+                    : (Array.isArray(src) ? src : []);
+
+                const weeklyByDay = {};
+                weeklySource.forEach(item => {
+                    if (!item) return;
+                    const dayId = parseInt(item.dayId, 10);
+                    if (isNaN(dayId) || dayId < 0 || dayId > 6) return;
+
+                    const shifts = Array.isArray(item.shifts)
+                        ? item.shifts
+                            .filter(s => s && s.start && s.end)
+                            .map(s => ({ start: s.start, end: s.end }))
+                        : [];
+
+                    weeklyByDay[dayId] = {
+                        dayId: dayId,
+                        dayName: item.dayName || this.defaultWeekdays[dayId].dayName,
+                        status: item.status === '休業' ? '休業' : '営業',
+                        shifts: shifts
+                    };
+                });
+
+                const weekly = this.defaultWeekdays.map(d => {
+                    if (weeklyByDay[d.dayId]) return weeklyByDay[d.dayId];
+                    return {
+                        dayId: d.dayId,
+                        dayName: d.dayName,
+                        status: '営業',
+                        shifts: [{ start: '10:00', end: '20:00' }]
+                    };
+                });
+
+                return { weekly: weekly, interval: interval };
             },
 
             // --- Auth ---
@@ -452,7 +548,7 @@
                             this.menu = data.menu;
                             this.slots = data.slots;
                             this.reservations = data.reservations;
-                            this.basicSettings = data.basicSettings || { weekly: [], interval: 60 };
+                            this.basicSettings = this.normalizeBasicSettings(data.basicSettings);
 
                             this.renderReservationList();
                             this.renderMenuSettings();
@@ -488,6 +584,9 @@
                 this.calendar = new FullCalendar.Calendar(calendarEl, {
                     initialView: 'dayGridMonth',
                     locale: 'ja',
+                    dayMaxEvents: false,
+                    displayEventTime: false,
+                    eventOrder: (a, b) => (a.extendedProps.sortKey || 0) - (b.extendedProps.sortKey || 0),
                     headerToolbar: {
                         left: 'prev,next today',
                         center: 'title',
@@ -498,8 +597,19 @@
                     fixedWeekCount: false,
                     showNonCurrentDates: false,
                     events: (fetchInfo, successCallback, failureCallback) => {
-                        const events = this.getCalendarEvents();
+                        const events = this.getCalendarEvents(fetchInfo);
                         successCallback(events);
+                    },
+                    eventContent: (arg) => {
+                        const div = document.createElement('div');
+                        div.className = 'slot-line';
+                        div.textContent = arg.event.extendedProps.label || arg.event.title || '';
+                        return { domNodes: [div] };
+                    },
+                    eventDidMount: (info) => {
+                        // Prevent FullCalendar's auto time text (e.g. 00:00/04:00) from showing.
+                        const timeEl = info.el.querySelector('.fc-event-time');
+                        if (timeEl) timeEl.remove();
                     },
                     dateClick: (info) => {
                         this.openDaySlotModal(info.dateStr);
@@ -515,72 +625,122 @@
                 }, 200);
             },
 
-            getCalendarEvents: function () {
-                const dailySlots = {};
-                const dailyReservationCounts = {};
+            getDayCandidateTimes: function (dateObj) {
+                const dayId = dateObj.getDay();
+                const settings = this.basicSettings.weekly && this.basicSettings.weekly.find(x => parseInt(x.dayId, 10) === dayId);
+                const interval = parseInt(this.basicSettings.interval, 10) || 60;
+                if (!settings || settings.status === '休業' || !Array.isArray(settings.shifts)) return [];
 
-                if (this.slots) {
-                    this.slots.forEach(slot => {
-                        const dateStr = slot.value.split(' ')[0].replace(/\//g, '-');
-                        if (!dailySlots[dateStr]) dailySlots[dateStr] = 0;
-                        dailySlots[dateStr]++;
-                    });
-                }
+                const toMin = (s) => parseInt(s.split(':')[0], 10) * 60 + parseInt(s.split(':')[1], 10);
+                const toTime = (m) => ('0' + Math.floor(m / 60)).slice(-2) + ':' + ('0' + (m % 60)).slice(-2);
 
-                if (this.reservations) {
-                    this.reservations.forEach(res => {
-                        if (res.status === 'キャンセル') return;
-                        const dateStr = new Date(res.date).toISOString().split('T')[0];
-                        if (!dailyReservationCounts[dateStr]) dailyReservationCounts[dateStr] = 0;
-                        dailyReservationCounts[dateStr]++;
-                    });
-                }
-
-                const events = [];
-                const dates = new Set([...Object.keys(dailySlots), ...Object.keys(dailyReservationCounts)]);
-
-                dates.forEach(date => {
-                    const count = dailySlots[date] || 0;
-                    const resCount = dailyReservationCounts[date] || 0;
-
-                    if (count > 0) {
-                        events.push({
-                            title: '○',
-                            start: date,
-                            textColor: '#28a745',
-                            backgroundColor: 'transparent',
-                            borderColor: 'transparent',
-                            classNames: ['fs-4', 'fw-bold', 'text-center']
-                        });
-                    } else if (resCount > 0 && count === 0) {
-                        events.push({
-                            title: '満',
-                            start: date,
-                            textColor: '#dc3545',
-                            backgroundColor: 'transparent',
-                            borderColor: 'transparent',
-                            classNames: ['fs-4', 'fw-bold', 'text-center']
-                        });
-                    }
-
-                    if (resCount > 0) {
-                        events.push({
-                            title: resCount + '件予約',
-                            start: date,
-                            backgroundColor: '#ffc107',
-                            borderColor: '#ffc107',
-                            textColor: '#000',
-                            classNames: ['small', 'px-1']
-                        });
+                const times = [];
+                settings.shifts.forEach(shift => {
+                    if (!shift || !shift.start || !shift.end) return;
+                    let cur = toMin(shift.start);
+                    const end = toMin(shift.end);
+                    while (cur < end) {
+                        times.push(toTime(cur));
+                        cur += interval;
                     }
                 });
+                return [...new Set(times)].sort();
+            },
+
+            getCalendarEvents: function (fetchInfo) {
+                const events = [];
+                const menuById = {};
+                (this.menu || []).forEach(m => {
+                    menuById[m.id] = m;
+                });
+
+                const activeSlotMap = {};
+                (this.slots || []).forEach(slot => {
+                    if (!slot || !slot.value) return;
+                    const dt = this.splitDateTime(slot.value);
+                    if (!dt) return;
+                    activeSlotMap[dt.dateKey + ' ' + dt.timeKey] = true;
+                });
+
+                const reservationMap = {};
+                (this.reservations || []).forEach(res => {
+                    if (!res || res.status === 'キャンセル' || !res.date) return;
+                    const dt = this.splitDateTime(res.date);
+                    if (!dt) return;
+                    reservationMap[dt.dateKey + ' ' + dt.timeKey] = res;
+                });
+
+                const start = new Date(fetchInfo.start.getFullYear(), fetchInfo.start.getMonth(), fetchInfo.start.getDate());
+                const end = new Date(fetchInfo.end.getFullYear(), fetchInfo.end.getMonth(), fetchInfo.end.getDate());
+                for (let d = new Date(start); d < end; d.setDate(d.getDate() + 1)) {
+                    const dateStr = this.toDateKeyFromDate(d);
+                    const candidates = this.getDayCandidateTimes(d);
+
+                    const extraTimes = [];
+                    Object.keys(activeSlotMap).forEach(k => {
+                        if (k.startsWith(dateStr + ' ')) extraTimes.push(k.split(' ')[1]);
+                    });
+                    Object.keys(reservationMap).forEach(k => {
+                        if (k.startsWith(dateStr + ' ')) extraTimes.push(k.split(' ')[1]);
+                    });
+                    const times = [...new Set([...candidates, ...extraTimes])].sort();
+
+                    times.forEach((time, idx) => {
+                        const key = dateStr + ' ' + time;
+                        const reservation = reservationMap[key];
+                        if (reservation) {
+                            const menu = menuById[reservation.menuId];
+                            const menuName = menu ? menu.name : (reservation.menuId || '');
+                            const duration = menu && menu.duration ? ` ${menu.duration}分` : '';
+                            events.push({
+                                title: '',
+                                start: dateStr,
+                                allDay: true,
+                                display: 'block',
+                                textColor: '#d63384',
+                                backgroundColor: 'transparent',
+                                borderColor: 'transparent',
+                                classNames: ['small', 'fw-bold'],
+                                extendedProps: {
+                                    sortKey: idx,
+                                    label: `${time} ご予約済 ${menuName}${duration}`.trim()
+                                }
+                            });
+                        } else if (activeSlotMap[key]) {
+                            events.push({
+                                title: '',
+                                start: dateStr,
+                                allDay: true,
+                                display: 'block',
+                                textColor: '#198754',
+                                backgroundColor: 'transparent',
+                                borderColor: 'transparent',
+                                classNames: ['small'],
+                                extendedProps: { sortKey: idx, label: `${time} ○` }
+                            });
+                        } else {
+                            events.push({
+                                title: '',
+                                start: dateStr,
+                                allDay: true,
+                                display: 'block',
+                                textColor: '#6c757d',
+                                backgroundColor: 'transparent',
+                                borderColor: 'transparent',
+                                classNames: ['small'],
+                                extendedProps: { sortKey: idx, label: `${time} ×` }
+                            });
+                        }
+                    });
+                }
 
                 return events;
             },
 
             openDaySlotModal: function (dateStr) {
                 this.currentEditDate = dateStr;
-                const d = new Date(dateStr);
+                const d = this.parseYmdToLocalDate(dateStr);
+                if (!d) return;
                 const dayName = ['日', '月', '火', '水', '木', '金', '土'][d.getDay()];
                 const dateDisplay = `${d.getFullYear()}年${d.getMonth() + 1}月${d.getDate()}日 (${dayName})`;
                 document.getElementById('slotEditDateDisplay').textContent = dateDisplay;
@@ -642,11 +802,9 @@
                 const reservedTimes = [];
                 this.reservations.forEach(r => {
                     if (r.status === 'キャンセル') return;
-                    const rd = new Date(r.date);
-                    const rDateStr = rd.toISOString().split('T')[0];
-                    if (rDateStr === dateStr) {
-                        reservedTimes.push(('0' + rd.getHours()).slice(-2) + ':' + ('0' + rd.getMinutes()).slice(-2));
-                    }
+                    const dt = this.splitDateTime(r.date);
+                    if (!dt) return;
+                    if (dt.dateKey === dateStr) reservedTimes.push(dt.timeKey);
                 });
 
                 activeTimes.forEach(t => {
@@ -727,7 +885,33 @@
             },
 
             // --- Basic Settings UI ---
+            resetBasicSettings: function () {
+                if (!confirm('現在の基本設定（曜日ごとの営業時間）を全てリセットし、初期状態に戻しますか？')) return;
+
+                this.showLoading(true);
+                fetch(GAS_URL, {
+                    method: 'POST',
+                    body: JSON.stringify({ action: 'reset_basic_settings' })
+                })
+                    .then(r => r.json())
+                    .then(data => {
+                        this.showLoading(false);
+                        if (data.status === 'success') {
+                            this.basicSettings = data.basicSettings;
+                            this.renderBasicSettings();
+                            this.showToast('設定を初期化しました');
+                        } else {
+                            alert('Error: ' + data.message);
+                        }
+                    })
+                    .catch(e => {
+                        this.showLoading(false);
+                        alert('Error: ' + e);
+                    });
+            },
+
             renderBasicSettings: function () {
+                this.basicSettings = this.normalizeBasicSettings(this.basicSettings);
                 const tbody = document.getElementById('basic-settings-tbody');
                 tbody.innerHTML = '';
                 document.getElementById('setting-interval').value = this.basicSettings.interval || 60;
@@ -788,7 +972,7 @@
                     });
 
                     return {
-                        dayId: row.dataset.dayId,
+                        dayId: parseInt(row.dataset.dayId, 10),
                         dayName: row.cells[0].textContent,
                         status: status,
                         shifts: shifts
@@ -1054,3 +1238,5 @@
 </body>
 
 </html>
+
+
