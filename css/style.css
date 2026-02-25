@@ -376,6 +376,9 @@ select {
   justify-content: space-between;
   align-items: center;
   font-size: 14px;
+  position: sticky;
+  top: 0;
+  z-index: 10;
 }
 
 .menu-summary-total {
