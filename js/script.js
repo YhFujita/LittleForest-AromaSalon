@@ -134,16 +134,17 @@ window.onload = function () {
 
     function handleMenuSelection(item) {
         if (!item.isOption) {
-            // Main Menu Selection (Radio-like)
+            // メインメニュー選択（ラジオボタン型 — 1つのみ選択可）
             if (selectedMainMenuId === item.id) {
-                selectedMainMenuId = null; // Toggle off
+                selectedMainMenuId = null; // トグルオフ
+                selectedOptionIds.clear(); // オプションもリセット
             } else {
                 selectedMainMenuId = item.id;
             }
         } else {
-            // Option Selection (Checkbox-like)
+            // オプション選択（チェックボックス型 — 複数選択可）
             if (!selectedMainMenuId) {
-                alert('先にメインメニューを選択してください');
+                // メインメニュー未選択時は選択不可
                 return;
             }
             if (selectedOptionIds.has(item.id)) {
@@ -162,14 +163,16 @@ window.onload = function () {
 
             item._el.classList.toggle('selected', isSelected);
 
-            // Interaction control for options
+            // オプション項目の有効化/無効化制御
             if (item.isOption) {
-                item._el.style.opacity = selectedMainMenuId ? '1' : '0.6';
-                item._el.style.cursor = selectedMainMenuId ? 'pointer' : 'not-allowed';
+                const enabled = !!selectedMainMenuId;
+                item._el.style.opacity = enabled ? '1' : '0.6';
+                item._el.style.pointerEvents = enabled ? 'auto' : 'none';
+                item._el.style.cursor = enabled ? 'pointer' : 'default';
             }
         });
 
-        // Update Summary
+        // サマリーバー更新
         const summaryBar = document.getElementById('menuSummaryBar');
         if (selectedMainMenuId) {
             summaryBar.classList.remove('hidden');
@@ -190,8 +193,6 @@ window.onload = function () {
             document.getElementById('totalDuration').textContent = totalDuration;
         } else {
             summaryBar.classList.add('hidden');
-            selectedOptionIds.clear(); // Reset options if main is deselected
-            updateUIState(); // Recursively sync UI
         }
     }
 
