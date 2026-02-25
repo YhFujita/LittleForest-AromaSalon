@@ -26,10 +26,14 @@ window.onload = function () {
     // ★ 重要: デプロイされたGASウェブアプリのURLをここに設定してください
     const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbwZw61TyYkb8fboc8mWRZGZUpzqRWUluykk2cQ4hKXQV83RySPsprsKVL9R8Luy4AbZtw/exec';
 
+    let allMenuItems = [];
+    let selectedMainMenuId = null;
+    let selectedOptionIds = new Set();
+
     const form = document.getElementById('reservationForm');
     const loading = document.getElementById('loading');
     const success = document.getElementById('successMessage');
-    const menuSelect = document.getElementById('menu');
+    const menuContainer = document.getElementById('menuContainer');
     const dateSelect = document.getElementById('datetime');
 
     // Load Data (Menu + Available Slots)
@@ -39,37 +43,8 @@ window.onload = function () {
             if (data.status === 'success') {
                 // Populate Menu
                 if (data.menu) {
-                    menuSelect.innerHTML = '<option value="" disabled selected>メニューを選択してください</option>';
-
-                    let currentSection = null;
-                    let currentGroup = null;
-
-                    data.menu.forEach(item => {
-                        // Check if section changed (only if new section is provided)
-                        const itemSection = item.section || '';
-
-                        if (itemSection) {
-                            // If a new section is defined, switch to it
-                            if (itemSection !== currentSection) {
-                                currentSection = itemSection;
-                                currentGroup = document.createElement('optgroup');
-                                currentGroup.label = currentSection;
-                                menuSelect.appendChild(currentGroup);
-                            }
-                        }
-                        // If itemSection is empty, we keep the currentGroup (inherit)
-                        // If no group has been started yet, currentGroup remains null
-
-                        const option = document.createElement('option');
-                        option.value = item.id;
-                        option.textContent = `${item.name} (${item.duration}分) - ¥${Number(item.price).toLocaleString()}`;
-
-                        if (currentGroup) {
-                            currentGroup.appendChild(option);
-                        } else {
-                            menuSelect.appendChild(option);
-                        }
-                    });
+                    allMenuItems = data.menu;
+                    renderMenuList();
                 }
                 // Populate Slots
                 if (data.slots) {
@@ -97,11 +72,134 @@ window.onload = function () {
             dateSelect.innerHTML = '<option value="" disabled selected>読み込み失敗</option>';
         });
 
+    function renderMenuList() {
+        menuContainer.innerHTML = '';
+
+        // Add Summary Bar at the top (initially hidden or zeroed)
+        const summaryBar = document.createElement('div');
+        summaryBar.id = 'menuSummaryBar';
+        summaryBar.className = 'menu-summary-bar hidden';
+        summaryBar.innerHTML = `
+            <span>合計 <span id="totalDuration">0</span>分</span>
+            <span class="menu-summary-total">¥<span id="totalPrice">0</span></span>
+        `;
+        menuContainer.appendChild(summaryBar);
+
+        let currentSection = null;
+        let currentSectionDiv = null;
+
+        allMenuItems.forEach(item => {
+            const itemSection = item.section || '';
+
+            // Section Header
+            if (itemSection && itemSection !== currentSection) {
+                currentSection = itemSection;
+
+                const headerDiv = document.createElement('div');
+                headerDiv.className = 'menu-section-header';
+                headerDiv.innerHTML = `<h3>${itemSection}</h3>`;
+                if (item.sectionDesc) {
+                    const descP = document.createElement('p');
+                    descP.className = 'menu-section-desc';
+                    descP.textContent = item.sectionDesc;
+                    headerDiv.appendChild(descP);
+                }
+                menuContainer.appendChild(headerDiv);
+            }
+
+            // Menu Card
+            const card = document.createElement('div');
+            card.className = `menu-item-card ${item.isOption ? 'option-item' : 'main-item'}`;
+            if (item.isOption) card.style.opacity = '0.6'; // Dim options initially
+
+            card.innerHTML = `
+                <div class="menu-selection-indicator"></div>
+                <div class="menu-item-info">
+                    <div class="menu-item-main">
+                        <span class="menu-item-name">${item.name}</span>
+                        ${item.description ? `<span class="menu-item-desc">${item.description}</span>` : ''}
+                    </div>
+                    <div class="menu-item-meta">
+                        <span class="menu-item-price">¥${Number(item.price).toLocaleString()}</span>
+                        <span class="menu-item-duration">${item.duration}分</span>
+                    </div>
+                </div>
+            `;
+
+            card.onclick = () => handleMenuSelection(item);
+            menuContainer.appendChild(card);
+            item._el = card; // Store direct reference
+        });
+    }
+
+    function handleMenuSelection(item) {
+        if (!item.isOption) {
+            // Main Menu Selection (Radio-like)
+            if (selectedMainMenuId === item.id) {
+                selectedMainMenuId = null; // Toggle off
+            } else {
+                selectedMainMenuId = item.id;
+            }
+        } else {
+            // Option Selection (Checkbox-like)
+            if (!selectedMainMenuId) {
+                alert('先にメインメニューを選択してください');
+                return;
+            }
+            if (selectedOptionIds.has(item.id)) {
+                selectedOptionIds.delete(item.id);
+            } else {
+                selectedOptionIds.add(item.id);
+            }
+        }
+        updateUIState();
+    }
+
+    function updateUIState() {
+        allMenuItems.forEach(item => {
+            const isSelected = (!item.isOption && selectedMainMenuId === item.id) ||
+                (item.isOption && selectedOptionIds.has(item.id));
+
+            item._el.classList.toggle('selected', isSelected);
+
+            // Interaction control for options
+            if (item.isOption) {
+                item._el.style.opacity = selectedMainMenuId ? '1' : '0.6';
+                item._el.style.cursor = selectedMainMenuId ? 'pointer' : 'not-allowed';
+            }
+        });
+
+        // Update Summary
+        const summaryBar = document.getElementById('menuSummaryBar');
+        if (selectedMainMenuId) {
+            summaryBar.classList.remove('hidden');
+            let totalPrice = 0;
+            let totalDuration = 0;
+
+            const mainItem = allMenuItems.find(m => m.id === selectedMainMenuId);
+            totalPrice += parseInt(mainItem.price);
+            totalDuration += parseInt(mainItem.duration);
+
+            selectedOptionIds.forEach(id => {
+                const opt = allMenuItems.find(m => m.id === id);
+                totalPrice += parseInt(opt.price);
+                totalDuration += parseInt(opt.duration);
+            });
+
+            document.getElementById('totalPrice').textContent = totalPrice.toLocaleString();
+            document.getElementById('totalDuration').textContent = totalDuration;
+        } else {
+            summaryBar.classList.add('hidden');
+            selectedOptionIds.clear(); // Reset options if main is deselected
+            updateUIState(); // Recursively sync UI
+        }
+    }
+
     form.addEventListener('submit', function (e) {
         e.preventDefault();
 
         // Simple Validation
-        const menu = document.getElementById('menu').value;
+        const menu = selectedMainMenuId;
         const datetime = document.getElementById('datetime').value;
         const name = document.getElementById('name').value;
         const phone = document.getElementById('phone').value;
@@ -109,7 +207,7 @@ window.onload = function () {
         const honeypot = document.getElementById('honeypot').value;
 
         if (!menu || !datetime || !name || !phone) {
-            alert('すべての必須項目を入力してください。');
+            alert('メインメニューと日時を選択し、必須項目を入力してください。');
             return;
         }
 
@@ -125,8 +223,8 @@ window.onload = function () {
 
         const data = {
             menu: menu,
+            options: Array.from(selectedOptionIds),
             datetime: datetime,
-            name: name,
             name: name,
             phone: phone,
             notes: notes,

@@ -40,7 +40,7 @@ var SheetUtils = (function () {
                 // 新しいヘッダー構成
                 sheet.appendRow(['希望日時', '予約ID', '予約者名', 'メニュー(ID)', 'メニュー名', '税抜金額', '消費税', '金額(税込)', '送信日時', '電話番号', '備考', 'ステータス', 'GoogleEventID']);
             } else if (name === SHEET_NAME_MENU) {
-                sheet.appendRow(['ID', 'メニュー名', '価格', '所要時間(分)', '説明', '表示順', 'カテゴリタイトル', 'セクション説明']);
+                sheet.appendRow(['ID', 'メニュー名', '価格', '所要時間(分)', '説明', '表示順', 'カテゴリタイトル', 'セクション説明', 'オプション']);
                 sheet.appendRow(['basic', 'ベーシックコース', '6000', '60', '基本のコースです', '1']);
                 sheet.appendRow(['premium', 'プレミアムコース', '9000', '90', '充実のコースです', '2']);
             } else if (name === SHEET_NAME_SLOTS) {
@@ -76,10 +76,11 @@ var SheetUtils = (function () {
             }
         } else if (name === SHEET_NAME_MENU) {
             // Check for Migration (Add SectionDesc Column)
-            var header = sheet.getRange(1, 1, 1, 10).getValues()[0];
-            // 7列目(index 6)が「カテゴリタイトル」で、8列目(index 7)が空なら新しい列を追加
-            if (header[6] === 'カテゴリタイトル' && (!header[7] || header[7] === '')) {
+            if (sheet.getLastColumn() < 8) {
                 sheet.getRange(1, 8).setValue('セクション説明');
+            }
+            if (sheet.getLastColumn() < 9) {
+                sheet.getRange(1, 9).setValue('オプション');
             }
         }
         return sheet;
@@ -125,37 +126,43 @@ var SheetUtils = (function () {
             var formattedBookingDate = formatDateJP(bookingDate);
 
             // Lookup Price & Menu Name
-            var price = 0;
-            var menuName = '';
             var menuItems = this.getMenuItems();
             var selectedMenu = menuItems.find(function (item) { return item.id === data.menu; });
+            var totalPrice = 0;
+            var menuNames = [];
+
             if (selectedMenu) {
-                price = parseInt(selectedMenu.price, 10) || 0;
-                menuName = selectedMenu.name;
+                totalPrice += parseInt(selectedMenu.price, 10) || 0;
+                menuNames.push(selectedMenu.name);
             }
 
-            // Calculate Tax
+            // Sum options
+            if (data.options && data.options.length > 0) {
+                data.options.forEach(function (optId) {
+                    var opt = menuItems.find(function (item) { return item.id === optId; });
+                    if (opt) {
+                        totalPrice += parseInt(opt.price, 10) || 0;
+                        menuNames.push(opt.name);
+                    }
+                });
+            }
+
+            var finalMenuName = menuNames.join(' + ');
+
+            // Calculate Tax (totalPrice is Incl Tax)
             var taxRate = 0.10;
-            var priceExcl = Math.ceil(price / (1 + taxRate)); // 税込から逆算なので切り上げor四捨五入？一般的には 本体 + 消費税 = 税込
-            // 税抜 = 税込 / 1.1 -> 端数処理。
-            // 例: 1100円 -> 1000円
-            // 例: 100円 -> 90.9... -> 91円?
-            // 日本の商慣習では「切り捨て」が多いが、税込価格設定の場合は「内税」計算。
-            // 国税庁: 総額表示。消費税額 = 支払総額 × 10 / 110 (円未満端数処理は事業者の判断)
-            // ここでは「切り捨て」で計算し、残りを本体とするのが安全か、あるいは 本体=round(税込/1.1) か。
-            // ここではシンプルに: 税抜 = Math.floor(price / 1.1), 税 = price - 税抜
-            var priceExcl = Math.floor(price / 1.1);
-            var tax = price - priceExcl;
+            var priceExcl = Math.floor(totalPrice / 1.1);
+            var tax = totalPrice - priceExcl;
 
             sheet.appendRow([
                 formattedBookingDate, // A
                 id,                   // B
                 data.name,            // C
-                data.menu,            // D (Menu ID)
-                menuName,             // E (Menu Name)
+                data.menu,            // D (Primary Menu ID)
+                finalMenuName,        // E (Menu Name(s))
                 priceExcl,            // F (Excl Tax)
                 tax,                  // G (Tax)
-                price,                // H (Incl Tax)
+                totalPrice,           // H (Incl Tax)
                 formattedTimestamp,   // I
                 "'" + data.phone,     // J
                 data.notes,           // K
@@ -186,7 +193,8 @@ var SheetUtils = (function () {
                     description: row[4],
                     order: row[5],
                     section: row[6] || '',
-                    sectionDesc: row[7] || ''
+                    sectionDesc: row[7] || '',
+                    isOption: !!row[8]
                 };
             }).filter(function (item) { return item.id && item.name; })
                 .sort(function (a, b) {
@@ -362,6 +370,7 @@ var SheetUtils = (function () {
         },
 
         saveMenuItem: function (item) {
+            console.log('saveMenuItem called with:', JSON.stringify(item));
             var sheet = getSheet(SHEET_NAME_MENU);
             var data = sheet.getDataRange().getValues();
             var updated = false;
@@ -369,7 +378,7 @@ var SheetUtils = (function () {
             if (item.id) {
                 for (var i = 1; i < data.length; i++) {
                     if (data[i][0] == item.id) {
-                        var range = sheet.getRange(i + 1, 1, 1, 8);
+                        var range = sheet.getRange(i + 1, 1, 1, 9);
                         range.setValues([[
                             item.id,
                             item.name,
@@ -378,7 +387,8 @@ var SheetUtils = (function () {
                             item.description,
                             item.order,
                             item.section,
-                            item.sectionDesc
+                            item.sectionDesc,
+                            item.isOption ? 'TRUE' : ''
                         ]]);
                         sheet.getRange(i + 1, 3).setNumberFormat('#,##0');
                         updated = true;
@@ -397,7 +407,8 @@ var SheetUtils = (function () {
                     item.description,
                     item.order,
                     item.section,
-                    item.sectionDesc
+                    item.sectionDesc,
+                    item.isOption ? 'TRUE' : ''
                 ]);
                 var lastRow = sheet.getLastRow();
                 sheet.getRange(lastRow, 3).setNumberFormat('#,##0');

@@ -133,6 +133,8 @@ function doPost(e) {
                             try {
                                 var menuItems = SheetUtils.getMenuItems();
                                 var menuId = data.newMenuId;
+                                var selectedOptionIds = data.options || []; // Assuming options are also updateable if needed
+
                                 if (!menuId) {
                                     var currentRes = SheetUtils.getReservation(data.reservationId);
                                     if (currentRes) menuId = currentRes.menu;
@@ -140,6 +142,12 @@ function doPost(e) {
 
                                 var selectedMenu = menuItems.find(function (m) { return m.id === menuId; });
                                 var duration = selectedMenu ? parseInt(selectedMenu.duration, 10) : 60;
+
+                                // Sum options duration
+                                selectedOptionIds.forEach(function (optId) {
+                                    var opt = menuItems.find(function (m) { return m.id === optId; });
+                                    if (opt) duration += parseInt(opt.duration, 10);
+                                });
 
                                 // 日付の生成（念のため new Date でラップ）
                                 var newStartTime = new Date(res.newDate);
@@ -164,7 +172,11 @@ function doPost(e) {
                                             var rowData = sheet.getRange(resDetail.row, 1, 1, 13).getValues()[0];
                                             var phone = rowData[9] || '';
                                             var notes = rowData[10] || '';
-                                            var newDesc = 'メニュー: ' + selectedMenu.name + '\n電話: ' + phone + '\n備考: ' + notes;
+                                            var newDesc = 'メニュー: ' + selectedMenu.name;
+                                            if (selectedOptionIds.length > 0) {
+                                                newDesc += ' (+' + selectedOptionIds.length + 'オプション)';
+                                            }
+                                            newDesc += '\n電話: ' + phone + '\n備考: ' + notes;
                                             evt.setDescription(newDesc);
                                             console.log('Calendar Description Updated');
                                         }
@@ -384,21 +396,37 @@ function sendAdminNotifications(data, reservationId) {
     var menuItems = SheetUtils.getMenuItems();
     var selectedMenu = menuItems.find(function (item) { return item.id === data.menu; });
     var menuName = selectedMenu ? selectedMenu.name : '不明なメニュー';
-    var duration = selectedMenu ? parseInt(selectedMenu.duration, 10) : 60; // Default 60 min
+    var duration = selectedMenu ? parseInt(selectedMenu.duration, 10) : 60;
+    var price = selectedMenu ? parseInt(selectedMenu.price, 10) : 0;
+    var optionNames = [];
+
+    if (data.options && data.options.length > 0) {
+        data.options.forEach(function (optId) {
+            var opt = menuItems.find(function (item) { return item.id === optId; });
+            if (opt) {
+                duration += parseInt(opt.duration, 10);
+                price += parseInt(opt.price, 10);
+                optionNames.push(opt.name);
+            }
+        });
+    }
+
+    var menuDisplay = menuName + (optionNames.length > 0 ? ' [+' + optionNames.join(', ') + ']' : '');
 
     var startTime = new Date(data.datetime);
     var endTime = new Date(startTime.getTime() + duration * 60000);
 
     // 2. Send Email (if ADMIN_EMAIL is set)
     if (adminEmail) {
-        var subject = '【予約受信】' + data.name + '様 (' + menuName + ')';
+        var subject = '【予約受信】' + data.name + '様 (' + menuDisplay + ')';
         var body =
             '新しい予約が入りました。\n\n' +
             '予約ID: ' + reservationId + '\n' +
             '日時: ' + Utilities.formatDate(startTime, Session.getScriptTimeZone(), 'yyyy/MM/dd HH:mm') + '\n' +
             'お名前: ' + data.name + '\n' +
             '電話番号: ' + data.phone + '\n' +
-            'メニュー: ' + menuName + ' (' + duration + '分)\n' +
+            'メニュー: ' + menuDisplay + ' (' + duration + '分)\n' +
+            '合計金額: ' + price.toLocaleString() + '円\n' +
             '備考: ' + (data.notes || 'なし') + '\n\n' +
             '管理者アプリで確認してください。';
         GmailApp.sendEmail(adminEmail, subject, body);
@@ -415,7 +443,7 @@ function sendAdminNotifications(data, reservationId) {
                 console.warn('Could not find calendar for ' + calendarId + '. Skipping event creation.');
             } else {
                 var event = cal.createEvent('予約: ' + data.name + '様', startTime, endTime, {
-                    description: 'メニュー: ' + menuName + '\n電話: ' + data.phone + '\n備考: ' + data.notes
+                    description: 'メニュー: ' + menuDisplay + '\n電話: ' + data.phone + '\n備考: ' + data.notes
                 });
                 eventId = event.getId();
             }
@@ -453,6 +481,20 @@ function sendLineNotification(userId, data) {
     var menuItems = SheetUtils.getMenuItems();
     var selectedMenu = menuItems.find(function (item) { return item.id === data.menu; });
     var menuName = selectedMenu ? selectedMenu.name : '不明なメニュー (ID: ' + data.menu + ')';
+    var price = selectedMenu ? parseInt(selectedMenu.price, 10) : 0;
+    var optionNames = [];
+
+    if (data.options && data.options.length > 0) {
+        data.options.forEach(function (optId) {
+            var opt = menuItems.find(function (item) { return item.id === optId; });
+            if (opt) {
+                price += parseInt(opt.price, 10);
+                optionNames.push(opt.name);
+            }
+        });
+    }
+
+    var menuDisplay = menuName + (optionNames.length > 0 ? '\n■オプション: ' + optionNames.join(', ') : '');
 
     // Format Date
     var d = new Date(data.datetime);
@@ -467,8 +509,8 @@ function sendLineNotification(userId, data) {
         data.name + '様、ご予約ありがとうございます。\n' +
         '以下の内容で承りました。\n\n' +
         '■日時: ' + dateStrJP + '\n' +
-        '■メニュー: ' + menuName + '\n' +
-        '■金額: ' + Number(selectedMenu ? selectedMenu.price : 0).toLocaleString() + '円\n\n' +
+        '■メニュー: ' + menuDisplay + '\n' +
+        '■合計金額: ' + Number(price).toLocaleString() + '円\n\n' +
         'ご来店をお待ちしております。';
 
     var payload = {
