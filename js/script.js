@@ -80,8 +80,11 @@ window.onload = function () {
         summaryBar.id = 'menuSummaryBar';
         summaryBar.className = 'menu-summary-bar hidden';
         summaryBar.innerHTML = `
-            <span>合計 <span id="totalDuration">0</span>分</span>
-            <span class="menu-summary-total">¥<span id="totalPrice">0</span></span>
+            <div id="selectedMenuNames" class="menu-summary-names"></div>
+            <div class="menu-summary-totals">
+                <span>合計 <span id="totalDuration">0</span>分</span>
+                <span class="menu-summary-total">¥<span id="totalPrice">0</span></span>
+            </div>
         `;
         menuContainer.appendChild(summaryBar);
 
@@ -189,6 +192,13 @@ window.onload = function () {
                 totalDuration += parseInt(opt.duration);
             });
 
+            // 選択中メニュー名を更新
+            const menuNames = [mainItem.name];
+            selectedOptionIds.forEach(id => {
+                const opt = allMenuItems.find(m => m.id === id);
+                if (opt) menuNames.push(opt.name);
+            });
+            document.getElementById('selectedMenuNames').textContent = menuNames.join(' + ');
             document.getElementById('totalPrice').textContent = totalPrice.toLocaleString();
             document.getElementById('totalDuration').textContent = totalDuration;
         } else {
