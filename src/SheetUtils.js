@@ -74,6 +74,13 @@ var SheetUtils = (function () {
                 // 以降のヘッダーは自動的にずれているはずだが、念のため確認
                 // F->I, G->J, H->K, I->L, J->M
             }
+        } else if (name === SHEET_NAME_MENU) {
+            // Check for Migration (Add SectionDesc Column)
+            var header = sheet.getRange(1, 1, 1, 10).getValues()[0];
+            // 7列目(index 6)が「カテゴリタイトル」で、8列目(index 7)が空なら新しい列を追加
+            if (header[6] === 'カテゴリタイトル' && (!header[7] || header[7] === '')) {
+                sheet.getRange(1, 8).setValue('セクション説明');
+            }
         }
         return sheet;
     }
@@ -362,7 +369,7 @@ var SheetUtils = (function () {
             if (item.id) {
                 for (var i = 1; i < data.length; i++) {
                     if (data[i][0] == item.id) {
-                        var range = sheet.getRange(i + 1, 1, 1, 7);
+                        var range = sheet.getRange(i + 1, 1, 1, 8);
                         range.setValues([[
                             item.id,
                             item.name,
