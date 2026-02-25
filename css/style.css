@@ -386,6 +386,22 @@ select {
   font-size: 18px;
 }
 
+/* 予約フォーム内フッター */
+.form-footer {
+  margin-top: 30px;
+  text-align: center;
+  font-size: 12px;
+  border-top: 1px solid rgba(0, 0, 0, 0.05);
+  padding-top: 20px;
+  color: var(--text-muted);
+}
+
+.form-footer a {
+  color: var(--primary-dark);
+  text-decoration: none;
+  margin: 0 5px;
+}
+
 
 button[type="submit"],
 #closeBtn {
