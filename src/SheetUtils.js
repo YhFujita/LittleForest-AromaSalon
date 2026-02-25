@@ -40,7 +40,7 @@ var SheetUtils = (function () {
                 // 新しいヘッダー構成
                 sheet.appendRow(['希望日時', '予約ID', '予約者名', 'メニュー(ID)', 'メニュー名', '税抜金額', '消費税', '金額(税込)', '送信日時', '電話番号', '備考', 'ステータス', 'GoogleEventID']);
             } else if (name === SHEET_NAME_MENU) {
-                sheet.appendRow(['ID', 'メニュー名', '価格', '所要時間(分)', '説明', '表示順', 'カテゴリタイトル']);
+                sheet.appendRow(['ID', 'メニュー名', '価格', '所要時間(分)', '説明', '表示順', 'カテゴリタイトル', 'セクション説明']);
                 sheet.appendRow(['basic', 'ベーシックコース', '6000', '60', '基本のコースです', '1']);
                 sheet.appendRow(['premium', 'プレミアムコース', '9000', '90', '充実のコースです', '2']);
             } else if (name === SHEET_NAME_SLOTS) {
@@ -178,7 +178,8 @@ var SheetUtils = (function () {
                     duration: row[3],
                     description: row[4],
                     order: row[5],
-                    section: row[6] || ''
+                    section: row[6] || '',
+                    sectionDesc: row[7] || ''
                 };
             }).filter(function (item) { return item.id && item.name; })
                 .sort(function (a, b) {
@@ -369,7 +370,8 @@ var SheetUtils = (function () {
                             item.duration,
                             item.description,
                             item.order,
-                            item.section
+                            item.section,
+                            item.sectionDesc
                         ]]);
                         sheet.getRange(i + 1, 3).setNumberFormat('#,##0');
                         updated = true;
@@ -387,7 +389,8 @@ var SheetUtils = (function () {
                     item.duration,
                     item.description,
                     item.order,
-                    item.section
+                    item.section,
+                    item.sectionDesc
                 ]);
                 var lastRow = sheet.getLastRow();
                 sheet.getRange(lastRow, 3).setNumberFormat('#,##0');

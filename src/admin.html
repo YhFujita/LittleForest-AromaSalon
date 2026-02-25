@@ -216,7 +216,8 @@
                 <input type="number" id="menuPrice" placeholder="価格（円）">
                 <input type="number" id="menuDuration" placeholder="所要時間（分）">
                 <input type="text" id="menuSection" placeholder="セクションタイトル（項目の上に表示：例「コース」）">
-                <textarea id="menuDesc" placeholder="説明" rows="2"></textarea>
+                <textarea id="menuDesc" placeholder="メニューの説明（空欄にすると非表示になります）" rows="2"></textarea>
+                <textarea id="sectionDesc" placeholder="セクションの説明（オプション）" rows="2"></textarea>
                 <input type="hidden" id="menuOrder"> <!-- Hidden, managed by list order -->
                 <button class="btn-primary" onclick="saveMenu()">保存</button>
                 <button class="btn-secondary hidden" id="cancelEditBtn" onclick="resetMenuForm()">キャンセル</button>
@@ -471,13 +472,20 @@
                     sectionHeader.style.cssText = 'background:#eee; padding:5px 10px; font-weight:bold; margin-top:10px; border-radius:4px;';
                     sectionHeader.textContent = item.section;
                     list.appendChild(sectionHeader);
+
+                    if (item.sectionDesc) {
+                        const sectionDescDiv = document.createElement('div');
+                        sectionDescDiv.style.cssText = 'font-size:0.85em; color:#666; padding:0 10px 5px; margin-top:-2px;';
+                        sectionDescDiv.textContent = item.sectionDesc;
+                        list.appendChild(sectionDescDiv);
+                    }
                 }
 
                 li.innerHTML = `
                 <div class="item-info">
                     <strong>${item.name}</strong> (${priceFormatted}円 / ${item.duration}分)
-                    <br><small>${item.description}</small>
-                    ${item.section ? '<br><span style="font-size:0.8em; color:blue;">[セクション始点: ' + item.section + ']</span>' : ''}
+                    ${item.description ? `<br><small>${item.description}</small>` : ''}
+                    ${item.section ? '<br><span style="font-size:0.8em; color:blue;">[セクション始点: ' + item.section + (item.sectionDesc ? ' / 説明あり' : '') + ']</span>' : ''}
                 </div>
                 <div class="item-actions" style="flex-direction: column; gap: 5px;">
                     <div style="display:flex; gap:5px;">
@@ -500,7 +508,8 @@
             document.getElementById('menuPrice').value = item.price;
             document.getElementById('menuDuration').value = item.duration;
             document.getElementById('menuSection').value = item.section || '';
-            document.getElementById('menuDesc').value = item.menuDesc || item.description;
+            document.getElementById('sectionDesc').value = item.sectionDesc || '';
+            document.getElementById('menuDesc').value = item.menuDesc || item.description || '';
             document.getElementById('menuOrder').value = item.order; // Preserve order
             document.getElementById('cancelEditBtn').classList.remove('hidden');
             window.scrollTo(0, 0);
@@ -512,6 +521,7 @@
             document.getElementById('menuPrice').value = '';
             document.getElementById('menuDuration').value = '';
             document.getElementById('menuSection').value = '';
+            document.getElementById('sectionDesc').value = '';
             document.getElementById('menuDesc').value = '';
             document.getElementById('menuOrder').value = '';
             document.getElementById('cancelEditBtn').classList.add('hidden');
@@ -525,6 +535,7 @@
                 duration: document.getElementById('menuDuration').value,
                 description: document.getElementById('menuDesc').value,
                 section: document.getElementById('menuSection').value,
+                sectionDesc: document.getElementById('sectionDesc').value,
                 order: document.getElementById('menuOrder').value // Keep existing if editing, or will be appended
             };
 
