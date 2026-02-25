@@ -1240,3 +1240,18 @@
 </html>
 
 
+(() => {                                                                                                                                            
+    const timeEl = document.querySelector('#slotCalendar .fc-event-time');                                                                            
+    console.log('1) .fc-event-time exists:', !!timeEl);                                                                                                
+    if (timeEl) {                                                                                                                                     
+      console.log('2) display:', getComputedStyle(timeEl).display, 'text:', timeEl.textContent);                                                       
+    }
+    const cssFound = Array.from(document.styleSheets).some(ss => {                                                                                    
+      try {                                                                                                                                            
+        return Array.from(ss.cssRules || []).some(r => (r.cssText || '').includes('#slotCalendar .fc-event-time'));                                    
+      } catch (e) {                                                                                                                                    
+        return false;                                                                                                                                 
+      }                                                                                                                                                
+    });                                                                                                                                                
+    console.log('3) CSS rule exists:', cssFound);                                                                                                      
+  })();
