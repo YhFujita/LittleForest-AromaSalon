@@ -530,3 +530,193 @@ button[type="submit"]:hover,
 .anchor-offset {
   scroll-margin-top: 100px;
 }
+
+/* ===== ホームページ メニュー表示セクション ===== */
+
+/* メニューヘッダー */
+.menu-page-header {
+  text-align: center;
+  margin-bottom: 40px;
+}
+
+.menu-page-subtitle {
+  font-size: 14px;
+  color: var(--text-muted);
+  letter-spacing: 2px;
+  margin-bottom: 8px;
+}
+
+.menu-page-title {
+  font-family: var(--font-serif);
+  font-size: 36px;
+  color: var(--primary-dark);
+  line-height: 1.3;
+  margin-bottom: 20px;
+  letter-spacing: 1px;
+}
+
+.menu-page-title span {
+  font-weight: 300;
+  font-size: 28px;
+  letter-spacing: 3px;
+}
+
+.menu-page-note {
+  font-size: 13px;
+  color: var(--text-muted);
+  line-height: 1.8;
+  max-width: 600px;
+  margin: 0 auto;
+}
+
+/* メニュー一覧 */
+.menu-page-list {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  max-width: 700px;
+  margin: 0 auto;
+}
+
+/* セクション見出し */
+.menu-page-section-header {
+  margin-top: 24px;
+  padding-bottom: 8px;
+  border-bottom: 2px solid var(--primary-color);
+}
+
+.menu-page-section-header:first-child {
+  margin-top: 0;
+}
+
+.menu-page-section-header h3 {
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--primary-dark);
+  margin: 0;
+  font-family: var(--font-serif);
+}
+
+.menu-page-section-desc {
+  font-size: 14px;
+  color: var(--text-muted);
+  line-height: 1.8;
+  margin: 8px 0 0 0;
+}
+
+/* メニューカード */
+.menu-page-card {
+  background: rgba(255, 255, 255, 0.85);
+  backdrop-filter: blur(8px);
+  border-radius: var(--radius-md);
+  padding: 32px 28px;
+  text-align: center;
+  border: 1px solid rgba(255, 255, 255, 0.6);
+  box-shadow: 0 4px 16px rgba(74, 110, 93, 0.07);
+  transition: transform 0.3s ease, box-shadow 0.3s ease;
+}
+
+.menu-page-card:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 8px 24px rgba(74, 110, 93, 0.12);
+}
+
+/* オプションメニューのカード */
+.menu-page-card.menu-page-option {
+  border-left: 4px solid var(--accent-color);
+}
+
+/* オプションバッジ */
+.menu-page-option-badge {
+  display: inline-block;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--accent-color);
+  letter-spacing: 1px;
+  margin-bottom: 8px;
+}
+
+/* カードタイトル */
+.menu-page-card-title {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--primary-dark);
+  margin-bottom: 12px;
+  line-height: 1.4;
+}
+
+/* カード説明文 */
+.menu-page-card-desc {
+  font-size: 14px;
+  color: var(--text-color);
+  line-height: 1.9;
+  margin-bottom: 16px;
+  max-width: 560px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+/* 料金表示 */
+.menu-page-card-price {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--primary-dark);
+  letter-spacing: 0.5px;
+}
+
+/* ローディング */
+.menu-page-loading {
+  text-align: center;
+  padding: 40px 0;
+  color: var(--text-muted);
+}
+
+.menu-page-loading .spinner {
+  width: 36px;
+  height: 36px;
+  margin: 0 auto 12px;
+  border: 3px solid rgba(127, 176, 149, 0.2);
+  border-radius: 50%;
+  border-top-color: var(--primary-color);
+  animation: spin 1s ease-in-out infinite;
+}
+
+/* エラー表示 */
+.menu-page-error {
+  text-align: center;
+  padding: 30px;
+  color: #b55;
+  background: rgba(200, 100, 100, 0.06);
+  border-radius: var(--radius-md);
+}
+
+/* レスポンシブ対応 */
+@media (max-width: 600px) {
+  .menu-page-title {
+    font-size: 28px;
+  }
+
+  .menu-page-title span {
+    font-size: 22px;
+  }
+
+  .menu-page-card {
+    padding: 24px 18px;
+  }
+
+  .menu-page-card-title {
+    font-size: 16px;
+  }
+
+  .menu-page-card-desc {
+    font-size: 13px;
+  }
+
+  .menu-page-card-price {
+    font-size: 14px;
+  }
+
+  .menu-page-note {
+    font-size: 12px;
+  }
+}
