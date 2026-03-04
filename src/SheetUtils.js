@@ -8,6 +8,8 @@ var SheetUtils = (function () {
     var SHEET_NAME_SETTINGS = '設定';
     var CACHE_KEY_MENU = 'MENU_CACHE';
     var CACHE_KEY_SLOTS = 'SLOTS_CACHE';
+    var MENU_CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
+    var SLOTS_CACHE_TTL_MS = 0; // Always refresh slots to prioritize consistency over cache hit
 
     function getSheet(name) {
         var id = PropertiesService.getScriptProperties().getProperty('SPREADSHEET_ID');
@@ -116,6 +118,42 @@ var SheetUtils = (function () {
         return null;
     }
 
+    function readCache(key) {
+        var raw = PropertiesService.getScriptProperties().getProperty(key);
+        if (!raw) return null;
+
+        try {
+            var parsed = JSON.parse(raw);
+            // New format: { data: [...], updatedAt: number }
+            if (parsed && typeof parsed === 'object' && parsed.data !== undefined && parsed.updatedAt !== undefined) {
+                return parsed;
+            }
+            // Legacy format: cache body itself
+            return {
+                data: parsed,
+                updatedAt: 0
+            };
+        } catch (e) {
+            console.warn('Cache parse failed for key=' + key + '. Rebuilding cache.', e);
+            return null;
+        }
+    }
+
+    function writeCache(key, data) {
+        var payload = {
+            updatedAt: Date.now(),
+            data: data
+        };
+        PropertiesService.getScriptProperties().setProperty(key, JSON.stringify(payload));
+    }
+
+    function isCacheFresh(cache, ttlMs) {
+        if (!cache) return false;
+        if (ttlMs <= 0) return false;
+        if (!cache.updatedAt || cache.updatedAt <= 0) return false;
+        return (Date.now() - cache.updatedAt) <= ttlMs;
+    }
+
     return {
         appendReservation: function (data) {
             var sheet = getSheet(SHEET_NAME_RESERVATIONS);
@@ -173,9 +211,10 @@ var SheetUtils = (function () {
         },
 
         getMenuItems: function () {
-            var scriptProperties = PropertiesService.getScriptProperties();
-            var cachedMenu = scriptProperties.getProperty(CACHE_KEY_MENU);
-            if (cachedMenu) return JSON.parse(cachedMenu);
+            var cachedMenu = readCache(CACHE_KEY_MENU);
+            if (cachedMenu && isCacheFresh(cachedMenu, MENU_CACHE_TTL_MS)) {
+                return cachedMenu.data;
+            }
             return this.updateMenuCache();
         },
 
@@ -203,15 +242,14 @@ var SheetUtils = (function () {
                     return orderA - orderB;
                 });
 
-            PropertiesService.getScriptProperties().setProperty(CACHE_KEY_MENU, JSON.stringify(menuItems));
+            writeCache(CACHE_KEY_MENU, menuItems);
             return menuItems;
         },
 
         getAvailableSlots: function () {
-            var scriptProperties = PropertiesService.getScriptProperties();
-            var cachedSlots = scriptProperties.getProperty(CACHE_KEY_SLOTS);
-            if (cachedSlots) {
-                return JSON.parse(cachedSlots);
+            var cachedSlots = readCache(CACHE_KEY_SLOTS);
+            if (cachedSlots && isCacheFresh(cachedSlots, SLOTS_CACHE_TTL_MS)) {
+                return cachedSlots.data;
             }
             return this.updateSlotsCache();
         },
@@ -221,21 +259,25 @@ var SheetUtils = (function () {
             var data = sheet.getDataRange().getValues();
             var headers = data.shift();
 
-            var slots = data.filter(function (row) {
-                return row[1] === '空き';
-            }).map(function (row) {
+            var slots = [];
+            data.forEach(function (row) {
+                if (row[1] !== '空き') return;
                 var date = new Date(row[0]);
-                return {
+                if (isNaN(date.getTime())) {
+                    // Ignore malformed rows so one bad row does not poison cache refresh.
+                    return;
+                }
+                slots.push({
                     value: Utilities.formatDate(date, Session.getScriptTimeZone(), 'yyyy/MM/dd HH:mm'),
                     display: formatDateJP(date)
-                };
+                });
             });
 
             slots.sort(function (a, b) {
                 return a.value.localeCompare(b.value);
             });
 
-            PropertiesService.getScriptProperties().setProperty(CACHE_KEY_SLOTS, JSON.stringify(slots));
+            writeCache(CACHE_KEY_SLOTS, slots);
             return slots;
         },
 

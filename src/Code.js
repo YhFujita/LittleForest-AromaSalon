@@ -359,6 +359,12 @@ function onSpreadsheetEdit(e) {
     if (sheetName === 'メニュー設定') {
         console.log('Menu sheet edited. Updating cache...');
         SheetUtils.updateMenuCache();
+        return;
+    }
+
+    if (sheetName === '予約可能日時') {
+        console.log('Slots sheet edited. Updating cache...');
+        SheetUtils.updateSlotsCache();
     }
 }
 

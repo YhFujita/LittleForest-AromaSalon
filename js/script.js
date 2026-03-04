@@ -50,7 +50,7 @@ window.onload = function () {
     }
 
     // Load Data (Menu + Available Slots)
-    fetch(GAS_API_URL + '?action=get_data')
+    fetch(GAS_API_URL + '?action=get_data&_=' + Date.now(), { cache: 'no-store' })
         .then(response => response.json())
         .then(data => {
             if (data.status === 'success') {
