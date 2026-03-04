@@ -36,6 +36,19 @@ window.onload = function () {
     const menuContainer = document.getElementById('menuContainer');
     const dateSelect = document.getElementById('datetime');
 
+    function parseSlotDatetime(slotValue) {
+        if (!slotValue) return null;
+        var m = String(slotValue).match(/(\d{4})\/(\d{1,2})\/(\d{1,2})\s+(\d{1,2}):(\d{2})/);
+        if (!m) return null;
+        return new Date(
+            parseInt(m[1], 10),
+            parseInt(m[2], 10) - 1,
+            parseInt(m[3], 10),
+            parseInt(m[4], 10),
+            parseInt(m[5], 10)
+        );
+    }
+
     // Load Data (Menu + Available Slots)
     fetch(GAS_API_URL + '?action=get_data')
         .then(response => response.json())
@@ -49,13 +62,19 @@ window.onload = function () {
                 // Populate Slots
                 if (data.slots) {
                     dateSelect.innerHTML = '<option value="" disabled selected>希望日時を選択してください</option>';
-                    if (data.slots.length === 0) {
+                    const now = new Date();
+                    const availableSlots = data.slots.filter(slot => {
+                        const slotDate = parseSlotDatetime(slot.value);
+                        return slotDate && slotDate >= now;
+                    });
+
+                    if (availableSlots.length === 0) {
                         const option = document.createElement('option');
                         option.disabled = true;
                         option.textContent = '現在予約できる空き枠がありません';
                         dateSelect.appendChild(option);
                     } else {
-                        data.slots.forEach(slot => {
+                        availableSlots.forEach(slot => {
                             const option = document.createElement('option');
                             // slot = { value: "yyyy/MM/dd HH:mm", display: "yyyy年... (Japanese)" }
                             option.value = slot.value;
