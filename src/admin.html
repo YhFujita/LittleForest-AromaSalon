@@ -149,6 +149,35 @@
             background-color: #f8d7da;
             color: #721c24;
         }
+
+        #adminPanel {
+            position: relative;
+        }
+
+        .admin-busy-overlay {
+            position: absolute;
+            inset: 0;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            background: rgba(255, 255, 255, 0.65);
+            z-index: 1000;
+            pointer-events: all;
+            border-radius: 8px;
+        }
+
+        #adminPanel.is-busy .admin-busy-overlay {
+            display: flex;
+        }
+
+        .admin-busy-overlay-text {
+            background: #333;
+            color: #fff;
+            padding: 10px 16px;
+            border-radius: 6px;
+            font-size: 0.95em;
+            font-weight: bold;
+        }
     </style>
 </head>
 
@@ -256,6 +285,10 @@
 
             <div id="reservationsList" class="item-list">Loading...</div>
         </div>
+
+        <div id="adminBusyOverlay" class="admin-busy-overlay">
+            <div id="adminBusyOverlayText" class="admin-busy-overlay-text">処理中...</div>
+        </div>
     </div>
 
     <div id="message"></div>
@@ -316,10 +349,51 @@
         let currentSlots = [];
         let currentMenu = [];
         let currentReservations = [];
+        let adminBusy = false;
+
+        function setAdminBusy(isBusy, message = '処理中...') {
+            const panel = document.getElementById('adminPanel');
+            const overlayText = document.getElementById('adminBusyOverlayText');
+            const controls = panel.querySelectorAll('button, input, select, textarea');
+            const tabs = panel.querySelectorAll('.tab');
+
+            adminBusy = isBusy;
+            panel.classList.toggle('is-busy', isBusy);
+            overlayText.textContent = message;
+
+            controls.forEach(el => {
+                if (isBusy) {
+                    el.dataset.wasDisabled = el.disabled ? '1' : '0';
+                    el.disabled = true;
+                } else {
+                    if (el.dataset.wasDisabled === '0') el.disabled = false;
+                    delete el.dataset.wasDisabled;
+                }
+            });
+
+            tabs.forEach(tab => {
+                tab.style.pointerEvents = isBusy ? 'none' : '';
+                tab.style.opacity = isBusy ? '0.6' : '';
+            });
+        }
+
+        function runWithAdminLock(task, message = '処理中...') {
+            if (adminBusy) return Promise.resolve();
+            setAdminBusy(true, message);
+            return Promise.resolve()
+                .then(task)
+                .catch(err => {
+                    console.error(err);
+                    showMessage('エラー: ' + (err && err.message ? err.message : err), true);
+                })
+                .finally(() => {
+                    setAdminBusy(false);
+                });
+        }
 
         function loadData() {
             // Fetch all data including admin specific view if possible
-            fetch(GAS_URL, { method: 'POST', body: JSON.stringify({ action: 'get_admin_data' }) })
+            return fetch(GAS_URL, { method: 'POST', body: JSON.stringify({ action: 'get_admin_data' }) })
                 .then(res => res.json())
                 .then(data => {
                     if (data.status === 'success') {
@@ -335,6 +409,7 @@
 
         // --- Tabs ---
         function switchTab(tabName) {
+            if (adminBusy) return;
             document.querySelectorAll('.tab').forEach(el => el.classList.remove('active'));
             document.querySelector(`.tab[onclick="switchTab('${tabName}')"]`).classList.add('active');
 
@@ -395,6 +470,7 @@
         }
 
         function saveSlotEdit() {
+            if (adminBusy) return;
             const currentDatetime = document.getElementById('editingSlotTargetValue').value;
             const newDate = document.getElementById('editSlotDate').value;
             const newTime = document.getElementById('editSlotTime').value;
@@ -406,27 +482,29 @@
 
             const newDatetime = newDate + ' ' + newTime; // Needs to be constructed as valid Date string
 
-            fetch(GAS_URL, {
-                method: 'POST',
-                body: JSON.stringify({
-                    action: 'update_slot_datetime',
-                    currentDatetime: currentDatetime,
-                    newDatetime: newDatetime
+            runWithAdminLock(() => {
+                return fetch(GAS_URL, {
+                    method: 'POST',
+                    body: JSON.stringify({
+                        action: 'update_slot_datetime',
+                        currentDatetime: currentDatetime,
+                        newDatetime: newDatetime
+                    })
                 })
-            })
-                .then(res => res.json())
-                .then(data => {
-                    if (data.status === 'success') {
-                        showMessage('日時を変更しました');
-                        cancelSlotEdit();
-                        loadData();
-                    } else {
+                    .then(res => res.json())
+                    .then(data => {
+                        if (data.status === 'success') {
+                            showMessage('日時を変更しました');
+                            cancelSlotEdit();
+                            return loadData();
+                        }
                         showMessage('エラー: ' + data.message, true);
-                    }
-                });
+                    });
+            }, '日時を更新中...');
         }
 
         function addSlot() {
+            if (adminBusy) return;
             const d = document.getElementById('newSlotDate').value;
             const t = document.getElementById('newSlotTime').value;
             if (!d || !t) {
@@ -437,29 +515,33 @@
             // Convert YYYY-MM-DD to YYYY/MM/DD for better compatibility with GAS new Date()
             const dateTimeStr = d.replace(/-/g, '/') + ' ' + t;
 
-            fetch(GAS_URL, {
-                method: 'POST',
-                body: JSON.stringify({ action: 'add_slots', slots: [dateTimeStr] })
-            }).then(res => res.json())
-                .then(data => {
-                    if (data.status === 'success') {
-                        showMessage('追加しました');
-                        loadData();
-                    } else {
+            runWithAdminLock(() => {
+                return fetch(GAS_URL, {
+                    method: 'POST',
+                    body: JSON.stringify({ action: 'add_slots', slots: [dateTimeStr] })
+                }).then(res => res.json())
+                    .then(data => {
+                        if (data.status === 'success') {
+                            showMessage('追加しました');
+                            return loadData();
+                        }
                         showMessage('エラー: ' + (data.message || 'Unknown'), true);
-                    }
-                });
+                    });
+            }, '予約枠を追加中...');
         }
 
         function deleteSlot(val) {
+            if (adminBusy) return;
             if (!confirm('本当に削除しますか？')) return;
-            fetch(GAS_URL, {
-                method: 'POST',
-                body: JSON.stringify({ action: 'delete_slot', datetime: val })
-            }).then(() => {
-                showMessage('削除しました', true);
-                loadData(); // Reload all data after deletion
-            });
+            runWithAdminLock(() => {
+                return fetch(GAS_URL, {
+                    method: 'POST',
+                    body: JSON.stringify({ action: 'delete_slot', datetime: val })
+                }).then(() => {
+                    showMessage('削除しました', true);
+                    return loadData(); // Reload all data after deletion
+                });
+            }, '予約枠を削除中...');
         }
 
         // --- Menu ---
@@ -509,6 +591,7 @@
         }
 
         function editMenu(item) {
+            if (adminBusy) return;
             document.getElementById('menuId').value = item.id;
             document.getElementById('menuName').value = item.name;
             document.getElementById('menuPrice').value = item.price;
@@ -523,6 +606,7 @@
         }
 
         function resetMenuForm() {
+            if (adminBusy) return;
             document.getElementById('menuId').value = '';
             document.getElementById('menuName').value = '';
             document.getElementById('menuPrice').value = '';
@@ -536,6 +620,7 @@
         }
 
         function saveMenu() {
+            if (adminBusy) return;
             const item = {
                 id: document.getElementById('menuId').value,
                 name: document.getElementById('menuName').value,
@@ -549,28 +634,34 @@
             };
             console.log('Sending save_menu request:', item);
 
-            fetch(GAS_URL, {
-                method: 'POST',
-                body: JSON.stringify({ action: 'save_menu', item: item })
-            }).then(() => {
-                showMessage('保存しました');
-                resetMenuForm();
-                loadData();
-            });
+            runWithAdminLock(() => {
+                return fetch(GAS_URL, {
+                    method: 'POST',
+                    body: JSON.stringify({ action: 'save_menu', item: item })
+                }).then(() => {
+                    showMessage('保存しました');
+                    resetMenuForm();
+                    return loadData();
+                });
+            }, 'メニューを保存中...');
         }
 
         function deleteMenu(id) {
+            if (adminBusy) return;
             if (!confirm('本当に削除しますか？')) return;
-            fetch(GAS_URL, {
-                method: 'POST',
-                body: JSON.stringify({ action: 'delete_menu', id: id })
-            }).then(() => {
-                showMessage('削除しました', true);
-                loadData();
-            });
+            runWithAdminLock(() => {
+                return fetch(GAS_URL, {
+                    method: 'POST',
+                    body: JSON.stringify({ action: 'delete_menu', id: id })
+                }).then(() => {
+                    showMessage('削除しました', true);
+                    return loadData();
+                });
+            }, 'メニューを削除中...');
         }
 
         function moveMenu(e, id, direction) {
+            if (adminBusy) return;
             e.stopPropagation();
             const index = currentMenu.findIndex(item => item.id == id);
             if (index < 0) return;
@@ -589,16 +680,18 @@
             // Save new order to backend
             const ids = currentMenu.map(item => item.id);
             // Debounce or just save? For simplicity, save immediately.
-            fetch(GAS_URL, {
-                method: 'POST',
-                body: JSON.stringify({ action: 'reorder_menu', ids: ids })
-            }).then(res => res.json())
-                .then(data => {
-                    if (data.status !== 'success') {
-                        alert('並び替えの保存に失敗しました');
-                        loadData(); // Revert
-                    }
-                });
+            runWithAdminLock(() => {
+                return fetch(GAS_URL, {
+                    method: 'POST',
+                    body: JSON.stringify({ action: 'reorder_menu', ids: ids })
+                }).then(res => res.json())
+                    .then(data => {
+                        if (data.status !== 'success') {
+                            alert('並び替えの保存に失敗しました');
+                        }
+                        return loadData(); // Ensure final state is synced
+                    });
+            }, '並び順を保存中...');
         }
 
         // --- Reservations ---
@@ -646,6 +739,7 @@
         }
 
         function openReservationEdit(res) {
+            if (adminBusy) return;
             document.getElementById('reservationEditForm').classList.remove('hidden');
             document.getElementById('editingResId').value = res.id;
             document.getElementById('editingResDisplay').textContent = `${res.displayDate} - ${res.name}様`;
@@ -673,10 +767,12 @@
         }
 
         function closeReservationEdit() {
+            if (adminBusy) return;
             document.getElementById('reservationEditForm').classList.add('hidden');
         }
 
         function saveReservationEdit() {
+            if (adminBusy) return;
             const id = document.getElementById('editingResId').value;
             const newDate = document.getElementById('editResDate').value; // YYYY-MM-DD
             const newTime = document.getElementById('editResTime').value; // HH:mm
@@ -694,57 +790,49 @@
 
             // UIフィードバック開始
             showMessage('変更を保存中...', false);
-            const saveBtn = document.querySelector('#reservationEditForm button.btn-primary');
-            saveBtn.disabled = true;
-            saveBtn.textContent = '保存中...';
 
-            fetch(GAS_URL, {
-                method: 'POST',
-                body: JSON.stringify({
-                    action: 'update_reservation',
-                    reservationId: id,
-                    newDatetime: newDatetime,
-                    newMenuId: newMenuId
+            runWithAdminLock(() => {
+                return fetch(GAS_URL, {
+                    method: 'POST',
+                    body: JSON.stringify({
+                        action: 'update_reservation',
+                        reservationId: id,
+                        newDatetime: newDatetime,
+                        newMenuId: newMenuId
+                    })
                 })
-            }).then(res => {
-                if (!res.ok) throw new Error('Network response was not ok');
-                return res.json();
-            })
-                .then(data => {
-                    if (data.status === 'success') {
-                        showMessage('予約を変更しました');
-                        closeReservationEdit();
-                        loadData(); // Reload
-                    } else {
+                    .then(res => {
+                        if (!res.ok) throw new Error('Network response was not ok');
+                        return res.json();
+                    })
+                    .then(data => {
+                        if (data.status === 'success') {
+                            showMessage('予約を変更しました');
+                            closeReservationEdit();
+                            return loadData(); // Reload
+                        }
                         showMessage('エラー: ' + data.message, true);
-                    }
-                })
-                .catch(e => {
-                    console.error(e);
-                    showMessage('エラーが発生しました: ' + e.message, true);
-                })
-                .finally(() => {
-                    // ボタンの状態を戻す
-                    saveBtn.disabled = false;
-                    saveBtn.textContent = '変更保存';
-                });
+                    });
+            }, '予約変更を保存中...');
         }
 
         function cancelReservationAction(id) {
+            if (adminBusy) return;
             if (!confirm('本当にこの予約を取り消しますか？\n（カレンダーからも削除されます）')) return;
 
-            fetch(GAS_URL, {
-                method: 'POST',
-                body: JSON.stringify({ action: 'cancel_reservation', reservationId: id })
-            }).then(res => res.json())
-                .then(data => {
-                    if (data.status === 'success') {
-                        showMessage('予約を取り消しました', true); // Show as 'success' style visually but maybe red message
-                        loadData();
-                    } else {
+            runWithAdminLock(() => {
+                return fetch(GAS_URL, {
+                    method: 'POST',
+                    body: JSON.stringify({ action: 'cancel_reservation', reservationId: id })
+                }).then(res => res.json())
+                    .then(data => {
+                        if (data.status === 'success') {
+                            showMessage('予約を取り消しました', true); // Show as 'success' style visually but maybe red message
+                            return loadData();
+                        }
                         showMessage('エラー: ' + data.message, true);
-                    }
-                });
+                    });
+            }, '予約を取り消し中...');
         }
 
 
