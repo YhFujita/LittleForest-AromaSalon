@@ -306,7 +306,24 @@ var SheetUtils = (function () {
             
             if (rowsToUpdate.length === 0) return false;
 
-            rowsToUpdate.forEach(function(row) {
+            // --- 1日全枠予約変更用追加コード ---
+            // 本来必要な枠のチェックはここまでで完了。
+            // 以降で実際に更新する対象を「その日1日のすべての枠」に拡張する。
+            var targetDateString = startObj.toDateString();
+            var allRowsToUpdate = [];
+            for (var j = 1; j < data.length; j++) {
+                var cDate = new Date(data[j][0]);
+                if (isNaN(cDate.getTime())) continue;
+                
+                if (cDate.toDateString() === targetDateString) {
+                    allRowsToUpdate.push(j + 1);
+                }
+            }
+            // 将来的に元の仕様(1日複数件)に戻す場合は allRowsToUpdate を rowsToUpdate に変更すればよい
+            var finalRowsToUpdate = allRowsToUpdate; // 1日1件仕様
+            // var finalRowsToUpdate = rowsToUpdate; // 将来的な複数件仕様の場合はこちらを使う
+
+            finalRowsToUpdate.forEach(function(row) {
                 sheet.getRange(row, 2).setValue('予約済');
             });
             
@@ -626,8 +643,25 @@ var SheetUtils = (function () {
                     rowsToUpdate.push(i + 1);
                 }
             }
-            if (rowsToUpdate.length > 0) {
-                rowsToUpdate.forEach(function(row) {
+
+            // --- 1日全枠空き変更用追加コード ---
+            // 実際に解放する対象を「その日1日のすべての枠」に拡張する。
+            var targetDateString = dateObj.toDateString();
+            var allRowsToUpdate = [];
+            for (var j = 1; j < data.length; j++) {
+                var cDate = new Date(data[j][0]);
+                if (isNaN(cDate.getTime())) continue;
+                
+                if (cDate.toDateString() === targetDateString) {
+                    allRowsToUpdate.push(j + 1);
+                }
+            }
+            // 将来的に元の仕様(1日複数件)に戻す場合は allRowsToUpdate を rowsToUpdate に変更すればよい
+            var finalRowsToUpdate = allRowsToUpdate; // 1日1件仕様
+            // var finalRowsToUpdate = rowsToUpdate; // 将来的な複数件仕様の場合はこちらを使う
+
+            if (finalRowsToUpdate.length > 0) {
+                finalRowsToUpdate.forEach(function(row) {
                     sheet.getRange(row, 2).setValue('空き');
                 });
                 this.updateSlotsCache();
