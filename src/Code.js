@@ -440,6 +440,38 @@ function sendAdminNotifications(data, reservationId) {
         console.warn('ADMIN_EMAIL not set. Skipping email notification.');
     }
 
+    // 2.5 Send LINE Notification to Admin (if ADMIN_LINE_USER_ID is set)
+    var adminLineUserId = props.getProperty('ADMIN_LINE_USER_ID');
+    var token = props.getProperty('LINE_CHANNEL_ACCESS_TOKEN');
+    if (adminLineUserId && token) {
+        var adminLineMessage =
+            '【予約受信】\n' +
+            '新しい予約が入りました。\n\n' +
+            '日時: ' + Utilities.formatDate(startTime, Session.getScriptTimeZone(), 'MM/dd HH:mm') + '\n' +
+            'お名前: ' + data.name + '様\n' +
+            '電話: ' + data.phone + '\n' +
+            'メニュー: ' + menuDisplay + ' (' + duration + '分)\n' +
+            '金額: ' + price.toLocaleString() + '円\n' +
+            '備考: ' + (data.notes || 'なし');
+
+        var payload = {
+            to: adminLineUserId,
+            messages: [{ type: 'text', text: adminLineMessage }]
+        };
+        var options = {
+            method: 'post',
+            contentType: 'application/json',
+            headers: { 'Authorization': 'Bearer ' + token },
+            payload: JSON.stringify(payload),
+            muteHttpExceptions: true
+        };
+        try {
+            UrlFetchApp.fetch('https://api.line.me/v2/bot/message/push', options);
+        } catch (e) {
+            console.error('Admin LINE Notification Error:', e);
+        }
+    }
+
     // 3. Add to Google Calendar (if CALENDAR_ID is set)
     var eventId = null;
     if (calendarId) {
@@ -488,6 +520,7 @@ function sendLineNotification(userId, data) {
     var selectedMenu = menuItems.find(function (item) { return item.id === data.menu; });
     var menuName = selectedMenu ? selectedMenu.name : '不明なメニュー (ID: ' + data.menu + ')';
     var price = selectedMenu ? parseInt(selectedMenu.price, 10) : 0;
+    var duration = selectedMenu ? parseInt(selectedMenu.duration, 10) : 60;
     var optionNames = [];
 
     if (data.options && data.options.length > 0) {
@@ -495,6 +528,7 @@ function sendLineNotification(userId, data) {
             var opt = menuItems.find(function (item) { return item.id === optId; });
             if (opt) {
                 price += parseInt(opt.price, 10);
+                duration += parseInt(opt.duration, 10);
                 optionNames.push(opt.name);
             }
         });
@@ -513,10 +547,10 @@ function sendLineNotification(userId, data) {
 
     var messageText =
         data.name + '様、ご予約ありがとうございます。\n' +
-        '以下の内容で承りました。\n\n' +
+        '以下の通り承りました。\n\n' +
         '■日時: ' + dateStrJP + '\n' +
-        '■メニュー: ' + menuDisplay + '\n' +
-        '■合計金額: ' + Number(price).toLocaleString() + '円\n\n' +
+        '■メニュー: ' + menuDisplay + ' (' + duration + '分)\n' +
+        '■金額: ' + Number(price).toLocaleString() + '円\n\n' +
         'ご来店をお待ちしております。';
 
     var payload = {
