@@ -402,22 +402,28 @@ function sendAdminNotifications(data, reservationId) {
     var menuItems = SheetUtils.getMenuItems();
     var selectedMenu = menuItems.find(function (item) { return item.id === data.menu; });
     var menuName = selectedMenu ? selectedMenu.name : '不明なメニュー';
-    var duration = selectedMenu ? parseInt(selectedMenu.duration, 10) : 60;
-    var price = selectedMenu ? parseInt(selectedMenu.price, 10) : 0;
-    var optionNames = [];
+    var baseDuration = selectedMenu ? parseInt(selectedMenu.duration, 10) || 0 : 60;
+    var duration = baseDuration;
+    var price = selectedMenu ? parseInt(selectedMenu.price, 10) || 0 : 0;
+    
+    var optionDisplays = [];
 
     if (data.options && data.options.length > 0) {
         data.options.forEach(function (optId) {
             var opt = menuItems.find(function (item) { return item.id === optId; });
             if (opt) {
-                duration += parseInt(opt.duration, 10);
-                price += parseInt(opt.price, 10);
-                optionNames.push(opt.name);
+                var optDuration = parseInt(opt.duration, 10) || 0;
+                duration += optDuration;
+                price += parseInt(opt.price, 10) || 0;
+                optionDisplays.push(opt.name + ' (' + optDuration + '分)');
             }
         });
     }
 
-    var menuDisplay = menuName + (optionNames.length > 0 ? ' [+' + optionNames.join(', ') + ']' : '');
+    var menuDisplay = menuName + ' (' + baseDuration + '分)';
+    if (optionDisplays.length > 0) {
+        menuDisplay += '\nオプション: ' + optionDisplays.join(', ');
+    }
 
     var startTime = new Date(data.datetime);
     var endTime = new Date(startTime.getTime() + duration * 60000);
@@ -431,7 +437,8 @@ function sendAdminNotifications(data, reservationId) {
             '日時: ' + Utilities.formatDate(startTime, Session.getScriptTimeZone(), 'yyyy/MM/dd HH:mm') + '\n' +
             'お名前: ' + data.name + '\n' +
             '電話番号: ' + data.phone + '\n' +
-            'メニュー: ' + menuDisplay + ' (' + duration + '分)\n' +
+            'メニュー: ' + menuDisplay + '\n' +
+            '合計時間: ' + duration + '分\n' +
             '合計金額: ' + price.toLocaleString() + '円\n' +
             '備考: ' + (data.notes || 'なし') + '\n\n' +
             '管理者アプリで確認してください。';
@@ -450,7 +457,8 @@ function sendAdminNotifications(data, reservationId) {
             '日時: ' + Utilities.formatDate(startTime, Session.getScriptTimeZone(), 'MM/dd HH:mm') + '\n' +
             'お名前: ' + data.name + '様\n' +
             '電話: ' + data.phone + '\n' +
-            'メニュー: ' + menuDisplay + ' (' + duration + '分)\n' +
+            'メニュー: ' + menuDisplay + '\n' +
+            '合計時間: ' + duration + '分\n' +
             '金額: ' + price.toLocaleString() + '円\n' +
             '備考: ' + (data.notes || 'なし');
 
@@ -519,22 +527,27 @@ function sendLineNotification(userId, data) {
     var menuItems = SheetUtils.getMenuItems();
     var selectedMenu = menuItems.find(function (item) { return item.id === data.menu; });
     var menuName = selectedMenu ? selectedMenu.name : '不明なメニュー (ID: ' + data.menu + ')';
-    var price = selectedMenu ? parseInt(selectedMenu.price, 10) : 0;
-    var duration = selectedMenu ? parseInt(selectedMenu.duration, 10) : 60;
-    var optionNames = [];
+    var baseDuration = selectedMenu ? parseInt(selectedMenu.duration, 10) || 0 : 60;
+    var duration = baseDuration;
+    var price = selectedMenu ? parseInt(selectedMenu.price, 10) || 0 : 0;
+    var optionDisplays = [];
 
     if (data.options && data.options.length > 0) {
         data.options.forEach(function (optId) {
             var opt = menuItems.find(function (item) { return item.id === optId; });
             if (opt) {
-                price += parseInt(opt.price, 10);
-                duration += parseInt(opt.duration, 10);
-                optionNames.push(opt.name);
+                var optDuration = parseInt(opt.duration, 10) || 0;
+                duration += optDuration;
+                price += parseInt(opt.price, 10) || 0;
+                optionDisplays.push(opt.name + ' (' + optDuration + '分)');
             }
         });
     }
 
-    var menuDisplay = menuName + (optionNames.length > 0 ? '\n■オプション: ' + optionNames.join(', ') : '');
+    var menuDisplay = menuName + ' (' + baseDuration + '分)';
+    if (optionDisplays.length > 0) {
+        menuDisplay += '\n■オプション: ' + optionDisplays.join(', ');
+    }
 
     // Format Date
     var d = new Date(data.datetime);
@@ -549,7 +562,7 @@ function sendLineNotification(userId, data) {
         data.name + '様、ご予約ありがとうございます。\n' +
         '以下の通り承りました。\n\n' +
         '■日時: ' + dateStrJP + '\n' +
-        '■メニュー: ' + menuDisplay + ' (' + duration + '分)\n' +
+        '■メニュー: ' + menuDisplay + '\n' +
         '■金額: ' + Number(price).toLocaleString() + '円\n\n' +
         'ご来店をお待ちしております。';
 
