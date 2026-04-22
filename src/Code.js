@@ -123,32 +123,33 @@ function doPost(e) {
 
         if (action === 'update_reservation') {
             try {
+                var menuItems = SheetUtils.getMenuItems();
+                var menuId = data.newMenuId;
+                var selectedOptionIds = data.options || [];
+
+                if (!menuId) {
+                    var currentRes = SheetUtils.getReservation(data.reservationId);
+                    if (currentRes) menuId = currentRes.menu;
+                }
+
+                var selectedMenu = menuItems.find(function (m) { return m.id === menuId; });
+                var duration = selectedMenu ? parseInt(selectedMenu.duration, 10) || 60 : 60;
+
+                selectedOptionIds.forEach(function (optId) {
+                    var opt = menuItems.find(function (m) { return m.id === optId; });
+                    if (opt) duration += parseInt(opt.duration, 10) || 0;
+                });
+                
+                duration += 60; // buffer
+
                 // data: { reservationId, newDatetime, newMenuId }
-                var res = SheetUtils.updateReservation(data.reservationId, data.newDatetime, data.newMenuId);
+                var res = SheetUtils.updateReservation(data.reservationId, data.newDatetime, data.newMenuId, duration);
                 if (res.success) {
                     if (res.googleEventId) {
                         var props = PropertiesService.getScriptProperties();
                         var calendarId = props.getProperty('CALENDAR_ID');
                         if (calendarId) {
                             try {
-                                var menuItems = SheetUtils.getMenuItems();
-                                var menuId = data.newMenuId;
-                                var selectedOptionIds = data.options || []; // Assuming options are also updateable if needed
-
-                                if (!menuId) {
-                                    var currentRes = SheetUtils.getReservation(data.reservationId);
-                                    if (currentRes) menuId = currentRes.menu;
-                                }
-
-                                var selectedMenu = menuItems.find(function (m) { return m.id === menuId; });
-                                var duration = selectedMenu ? parseInt(selectedMenu.duration, 10) : 60;
-
-                                // Sum options duration
-                                selectedOptionIds.forEach(function (optId) {
-                                    var opt = menuItems.find(function (m) { return m.id === optId; });
-                                    if (opt) duration += parseInt(opt.duration, 10);
-                                });
-
                                 // 日付の生成（念のため new Date でラップ）
                                 var newStartTime = new Date(res.newDate);
                                 var newEndTime = new Date(newStartTime.getTime() + duration * 60000);
@@ -220,8 +221,26 @@ function doPost(e) {
 
         // 2. Available Slot Check (Exclusive Lock)
         // Attempt to update the slot status. If it fails (already taken), return error.
-        if (!SheetUtils.reserveSlot(data.datetime)) {
-            throw new Error('選択された日時は既に予約が入ってしまいました。別の日時を選択してください。');
+        
+        // Calculate total duration
+        var menuItems = SheetUtils.getMenuItems();
+        var selectedMenu = menuItems.find(function (item) { return item.id === data.menu; });
+        var duration = selectedMenu ? parseInt(selectedMenu.duration, 10) || 0 : 60;
+        
+        if (data.options && data.options.length > 0) {
+            data.options.forEach(function (optId) {
+                var opt = menuItems.find(function (item) { return item.id === optId; });
+                if (opt) {
+                    duration += parseInt(opt.duration, 10) || 0;
+                }
+            });
+        }
+        
+        // Add 60 mins buffer
+        duration += 60;
+
+        if (!SheetUtils.reserveSlot(data.datetime, duration)) {
+            throw new Error('選択された時間帯は既に予約が入っているか、枠が足りません。別の日時を選択してください。');
         }
 
         // 3. Input Validation

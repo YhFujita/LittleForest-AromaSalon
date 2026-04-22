@@ -281,26 +281,37 @@ var SheetUtils = (function () {
             return slots;
         },
 
-        reserveSlot: function (targetDatetimeStr) {
+        reserveSlot: function (targetDatetimeStr, durationMinutes) {
             var sheet = getSheet(SHEET_NAME_SLOTS);
             var data = sheet.getDataRange().getValues();
-            var timeZone = Session.getScriptTimeZone();
+            
+            var startObj = parseDatetimeString(targetDatetimeStr);
+            if (!startObj) return false;
+            var endObj = new Date(startObj.getTime() + (durationMinutes || 60) * 60000);
+            
+            var rowsToUpdate = [];
 
             for (var i = 1; i < data.length; i++) {
                 var cellDate = new Date(data[i][0]);
-                var cellStatus = data[i][1];
-                var cellDateStr = Utilities.formatDate(cellDate, timeZone, 'yyyy/MM/dd HH:mm');
-
-                if (cellDateStr === targetDatetimeStr) {
+                if (isNaN(cellDate.getTime())) continue;
+                
+                if (cellDate >= startObj && cellDate < endObj) {
+                    var cellStatus = data[i][1];
                     if (cellStatus !== '空き') {
                         return false;
                     }
-                    sheet.getRange(i + 1, 2).setValue('予約済');
-                    this.updateSlotsCache();
-                    return true;
+                    rowsToUpdate.push(i + 1);
                 }
             }
-            return false;
+            
+            if (rowsToUpdate.length === 0) return false;
+
+            rowsToUpdate.forEach(function(row) {
+                sheet.getRange(row, 2).setValue('予約済');
+            });
+            
+            this.updateSlotsCache();
+            return true;
         },
 
         addSlots: function (slots) {
@@ -579,6 +590,7 @@ var SheetUtils = (function () {
                         date: d,
                         id: data[i][1],
                         menu: data[i][3],
+                        menuName: data[i][4],
                         status: data[i][11], // L列
                         googleEventId: data[i][12] // M列
                     };
@@ -586,6 +598,43 @@ var SheetUtils = (function () {
             }
             return null;
         },
+
+        releaseSlots: function(dateObj, menuId, menuNameStr) {
+            var menuItems = this.getMenuItems();
+            var duration = 60; // base if not found
+            var primaryMenu = menuItems.find(function(item) { return item.id === menuId; });
+            if (primaryMenu) {
+                duration = parseInt(primaryMenu.duration, 10) || 0;
+            }
+            if (menuNameStr) {
+                menuItems.forEach(function(item) {
+                    if (item.isOption && menuNameStr.indexOf(item.name) !== -1) {
+                        duration += parseInt(item.duration, 10) || 0;
+                    }
+                });
+            }
+            duration += 60; // buffer
+            
+            var endObj = new Date(dateObj.getTime() + duration * 60000);
+            var sheet = getSheet(SHEET_NAME_SLOTS);
+            var data = sheet.getDataRange().getValues();
+            var rowsToUpdate = [];
+            for (var i = 1; i < data.length; i++) {
+                var cellDate = new Date(data[i][0]);
+                if (isNaN(cellDate.getTime())) continue;
+                if (cellDate >= dateObj && cellDate < endObj) {
+                    rowsToUpdate.push(i + 1);
+                }
+            }
+            if (rowsToUpdate.length > 0) {
+                rowsToUpdate.forEach(function(row) {
+                    sheet.getRange(row, 2).setValue('空き');
+                });
+                this.updateSlotsCache();
+            }
+        },
+
+
 
         cancelReservation: function (reservationId) {
             var sheet = getSheet(SHEET_NAME_RESERVATIONS);
@@ -612,7 +661,7 @@ var SheetUtils = (function () {
                         }
                     }
                     var dateStr = Utilities.formatDate(date, timeZone, 'yyyy/MM/dd HH:mm');
-                    this.updateSlotStatus(dateStr, '空き');
+                    this.releaseSlots(date, data[i][3], data[i][4]);
 
                     return {
                         success: true,
@@ -625,7 +674,7 @@ var SheetUtils = (function () {
             return { success: false, message: 'Reservation not found' };
         },
 
-        updateReservation: function (reservationId, newDatetime, newMenuId) {
+        updateReservation: function (reservationId, newDatetime, newMenuId, durationMinutes) {
             var res = this.getReservation(reservationId);
             if (!res) return { success: false, message: 'Reservation not found' };
 
@@ -639,11 +688,25 @@ var SheetUtils = (function () {
             }
             var newDatetimeStr = Utilities.formatDate(newDateObj, timeZone, 'yyyy/MM/dd HH:mm');
 
-            if (currentDatetimeStr !== newDatetimeStr) {
-                if (!this.reserveSlot(newDatetimeStr)) {
-                    return { success: false, message: '変更先の日時は既に埋まっています。' };
+            var menuItems = this.getMenuItems();
+            var oldDuration = 60;
+            var oldPrimaryMenu = menuItems.find(function(item) { return item.id === res.menu; });
+            if (oldPrimaryMenu) oldDuration = parseInt(oldPrimaryMenu.duration, 10) || 0;
+            if (res.menuName) {
+                menuItems.forEach(function(item) {
+                    if (item.isOption && res.menuName.indexOf(item.name) !== -1) oldDuration += parseInt(item.duration, 10) || 0;
+                });
+            }
+            oldDuration += 60;
+
+            if (currentDatetimeStr !== newDatetimeStr || oldDuration !== durationMinutes) {
+                // Rollback approach:
+                this.releaseSlots(res.date, res.menu, res.menuName);
+                if (!this.reserveSlot(newDatetimeStr, durationMinutes)) {
+                    // Rollback
+                    this.reserveSlot(currentDatetimeStr, oldDuration);
+                    return { success: false, message: '変更先の日時は既に埋まっているか、必要な連続枠がありません。' };
                 }
-                this.updateSlotStatus(currentDatetimeStr, '空き');
             }
 
             var row = res.row;
