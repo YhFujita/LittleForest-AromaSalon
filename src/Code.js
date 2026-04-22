@@ -139,7 +139,7 @@ function doPost(e) {
                     var opt = menuItems.find(function (m) { return m.id === optId; });
                     if (opt) duration += parseInt(opt.duration, 10) || 0;
                 });
-                
+
                 duration += 60; // buffer
 
                 // data: { reservationId, newDatetime, newMenuId }
@@ -221,12 +221,12 @@ function doPost(e) {
 
         // 2. Available Slot Check (Exclusive Lock)
         // Attempt to update the slot status. If it fails (already taken), return error.
-        
+
         // Calculate total duration
         var menuItems = SheetUtils.getMenuItems();
         var selectedMenu = menuItems.find(function (item) { return item.id === data.menu; });
         var duration = selectedMenu ? parseInt(selectedMenu.duration, 10) || 0 : 60;
-        
+
         if (data.options && data.options.length > 0) {
             data.options.forEach(function (optId) {
                 var opt = menuItems.find(function (item) { return item.id === optId; });
@@ -235,7 +235,7 @@ function doPost(e) {
                 }
             });
         }
-        
+
         // Add 60 mins buffer
         duration += 60;
 
@@ -424,7 +424,7 @@ function sendAdminNotifications(data, reservationId) {
     var baseDuration = selectedMenu ? parseInt(selectedMenu.duration, 10) || 0 : 60;
     var duration = baseDuration;
     var price = selectedMenu ? parseInt(selectedMenu.price, 10) || 0 : 0;
-    
+
     var optionDisplays = [];
 
     if (data.options && data.options.length > 0) {
@@ -583,6 +583,7 @@ function sendLineNotification(userId, data) {
         '■日時: ' + dateStrJP + '\n' +
         '■メニュー: ' + menuDisplay + '\n' +
         '■金額: ' + Number(price).toLocaleString() + '円\n\n' +
+        '施術時間以外に、前後合わせて60分ほどお支度と問診等のお時間をいただきます。 \n\n' +
         'ご来店をお待ちしております。';
 
     var payload = {
