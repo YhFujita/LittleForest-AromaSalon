@@ -664,6 +664,11 @@ button[type="submit"]:hover,
   letter-spacing: 0.5px;
 }
 
+.menu-duration-wrap {
+  display: inline-block;
+  white-space: nowrap;
+}
+
 /* ローディング */
 .menu-page-loading {
   text-align: center;
@@ -692,6 +697,11 @@ button[type="submit"]:hover,
 
 /* レスポンシブ対応 */
 @media (max-width: 600px) {
+  .hero h1 {
+    font-size: 28px;
+    margin-bottom: 16px;
+  }
+
   .menu-page-title {
     font-size: 28px;
   }

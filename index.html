@@ -14,14 +14,14 @@
         <a href="index.html" class="logo">Little Forest</a>
         <div class="nav-links">
             <a href="#menuSection">メニュー</a>
-            <a href="reservation.html">ご予約</a>
+            <a href="reservation.html">ご予約</a><br>
             <a href="legal.html">規約・ポリシー</a>
         </div>
     </nav>
 
     <div class="container">
         <header class="hero">
-            <h1>心と体を整える<br>静かな森へようこそ</h1>
+            <h1>心と体を整える<br>静かな森へ<br>ようこそ</h1>
             <p>Little Forestは、日々の喧騒を忘れ、深いリラックスの中で本来の自分を取り戻すための女性専用のプライベートサロンです。</p>
             <br>
             <a href="reservation.html" class="btn-primary">ご予約はこちら</a>
@@ -133,8 +133,8 @@
                     }
 
                     // メニュー名と時間
-                    const durationText = item.duration ? `（${item.duration}分間）` : '';
-                    cardHTML += `<h3 class="menu-page-card-title">${item.name} ${durationText}</h3>`;
+                    const durationSpan = item.duration ? `<span class="menu-duration-wrap">（${item.duration}分間）</span>` : '';
+                    cardHTML += `<h3 class="menu-page-card-title">${item.name} ${durationSpan}</h3>`;
 
                     // 説明文（メニューに個別説明があればそれを表示）
                     if (item.description) {
